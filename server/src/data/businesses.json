@@ -109,7 +109,7 @@
     "name": "test 1",
     "slug": "test-1",
     "logoText": "T1",
-    "logoUrl": "",
+    "logoUrl": "/api/public/logos/logo_f9857cfba54abe14",
     "category": "Restaurant",
     "location": "",
     "address": "",
@@ -165,16 +165,16 @@
       }
     ],
     "analytics": {
-      "totalScans": 1,
-      "landingViews": 1,
-      "questionnaireStarts": 0,
-      "questionnaireCompletions": 0,
-      "reviewDraftsGenerated": 0,
-      "copyClicks": 0,
-      "googleReviewRedirects": 0
+      "totalScans": 7,
+      "landingViews": 7,
+      "questionnaireStarts": 1,
+      "questionnaireCompletions": 1,
+      "reviewDraftsGenerated": 1,
+      "copyClicks": 1,
+      "googleReviewRedirects": 1
     },
     "createdAt": "2026-11-26T10:46:53.661Z",
-    "updatedAt": "2026-11-26T11:03:28.477Z"
+    "updatedAt": "2026-11-26T11:18:08.531Z"
   },
   {
     "publicId": "test-dental-beta-16e9d8",

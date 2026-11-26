@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowRight,
   Check,
   Copy,
   ExternalLink,
@@ -9,11 +10,13 @@ import {
 } from 'lucide-react'
 import BusinessLogo from '../ui/BusinessLogo'
 import { getFontStack, loadGoogleFont } from '../../utils/fontLoader'
+import { getCategoryTheme } from '../../utils/categoryThemes'
+
+const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 /**
- * Shared editorial customer-facing review experience.
- * Used by both PublicReviewPage (/review/:businessId) and the admin Live Preview
- * so both always stay 100% visually and functionally consistent.
+ * Editorial customer-facing review experience.
+ * Powers both PublicReviewPage (/review/:businessId) and the Admin Live Preview.
  */
 export default function PublicReviewExperience({
   business,
@@ -42,7 +45,8 @@ export default function PublicReviewExperience({
   const isCentered = appearance.businessNameAlignment === 'center'
   const isAbove = appearance.logoPlacement === 'above'
   const isCompact = appearance.layoutStyle === 'compact'
-  const hasLogo = Boolean(business?.logoUrl || business?.logoText)
+  const hasUploadedLogo = Boolean(business?.logoUrl)
+  const categoryTheme = getCategoryTheme(business?.category)
 
   useEffect(() => {
     loadGoogleFont(fontFamily)
@@ -123,6 +127,9 @@ export default function PublicReviewExperience({
       const generated = await onGenerateDraft(answers)
       setDraft(generated)
       setStep('draft')
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     } catch (err) {
       setValidationError(err.message || 'Could not generate review draft.')
     } finally {
@@ -150,7 +157,7 @@ export default function PublicReviewExperience({
       await navigator.clipboard.writeText(draft)
       setCopied(true)
       onCopySuccess?.()
-      setTimeout(() => setCopied(false), 2500)
+      setTimeout(() => setCopied(false), 2600)
     } catch {
       if (draftTextareaRef.current) {
         draftTextareaRef.current.focus()
@@ -164,72 +171,545 @@ export default function PublicReviewExperience({
     .filter(Boolean)
     .join(' · ')
 
+  const useSplitDesktop = !isPreview && !isCompact
+
+  const renderBrandIdentity = () => (
+    <div
+      className={`flex gap-4 ${
+        isAbove ? 'flex-col' : 'flex-row items-center'
+      } ${
+        isCentered
+          ? isAbove
+            ? 'items-center text-center'
+            : 'justify-center text-left'
+          : 'items-start text-left'
+      }`}
+    >
+      {hasUploadedLogo ? (
+        <BusinessLogo
+          logoUrl={business?.logoUrl}
+          logoText={business?.logoText}
+          name={business?.name}
+          size={isCompact ? 'md' : 'lg'}
+          className="border-[#E2DFD7] shadow-xs"
+        />
+      ) : (
+        <div
+          className={`${
+            isCompact ? 'w-10 h-10 text-xs' : 'w-12 h-12 text-sm'
+          } rounded-md border flex items-center justify-center font-semibold tracking-wider shrink-0`}
+          style={{
+            borderColor: `${accentColor}40`,
+            color: accentColor,
+            backgroundColor: `${accentColor}0D`,
+          }}
+          aria-hidden="true"
+        >
+          {business?.logoText || 'RB'}
+        </div>
+      )}
+
+      <div className="min-w-0">
+        <p
+          className="text-[11px] font-medium uppercase tracking-[0.16em] mb-1"
+          style={{ color: accentColor }}
+        >
+          {locationLine || categoryTheme.kicker}
+        </p>
+        <h1
+          className={`${
+            useSplitDesktop
+              ? 'text-3xl sm:text-4xl lg:text-[40px] leading-[1.08]'
+              : isCompact
+                ? 'text-xl sm:text-2xl leading-tight'
+                : 'text-2xl sm:text-[28px] leading-tight'
+          } font-semibold tracking-tight text-[#171716] break-words`}
+        >
+          {business?.name}
+        </h1>
+      </div>
+    </div>
+  )
+
+  const renderProgressBlock = () => {
+    if (questions.length <= 1 || step !== 'questionnaire') return null
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-[#6E6C66]">
+          <span className="uppercase tracking-[0.12em] font-medium">
+            Progress
+          </span>
+          <span className="tabular-nums font-medium text-[#171716]">
+            {answeredCount} of {questions.length} · {progressPct}%
+          </span>
+        </div>
+        <div
+          className="h-[2px] w-full rounded-full overflow-hidden"
+          style={{ backgroundColor: categoryTheme.borderColor }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-300"
+            style={{
+              width: `${progressPct}%`,
+              backgroundColor: accentColor,
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const renderInteractiveStage = () => (
+    <>
+      {/* Stage 1: Questionnaire */}
+      {step === 'questionnaire' && (
+        <form onSubmit={handleSubmit} className="space-y-7">
+          {useSplitDesktop ? (
+            <div className="lg:hidden">{renderProgressBlock()}</div>
+          ) : (
+            renderProgressBlock()
+          )}
+
+          {questions.length === 0 ? (
+            <div className="space-y-3 py-2">
+              <label className="block text-[15px] font-medium text-[#171716]">
+                Share a few words about your experience
+              </label>
+              <textarea
+                rows={4}
+                value={answers.general || ''}
+                onChange={(e) => handleShortText('general', e.target.value)}
+                placeholder="Write your thoughts here..."
+                className="w-full rounded-md border bg-white px-4 py-3 text-[15px] text-[#171716] placeholder:text-[#9C9A94] focus:outline-none transition-colors"
+                style={{ borderColor: categoryTheme.borderColor }}
+              />
+            </div>
+          ) : (
+            <div
+              className="divide-y"
+              style={{ borderColor: categoryTheme.borderColor }}
+            >
+              {questions.map((q, index) => (
+                <div
+                  key={q.id}
+                  className={`${
+                    index === 0 ? 'pt-0' : isCompact ? 'pt-5' : 'pt-7'
+                  } ${isCompact ? 'pb-5' : 'pb-7'} space-y-3.5`}
+                  style={{ borderColor: categoryTheme.borderColor }}
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="flex items-baseline gap-3">
+                      <span
+                        className="text-xs font-semibold tabular-nums tracking-wider"
+                        style={{ color: accentColor }}
+                      >
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <label className="text-[16px] font-medium text-[#171716] leading-snug">
+                        {q.text}
+                      </label>
+                    </div>
+                    <span className="text-[11px] uppercase tracking-[0.1em] text-[#8C8A84] shrink-0">
+                      {q.required ? 'Required' : 'Optional'}
+                    </span>
+                  </div>
+
+                  {q.type === 'single_choice' && (
+                    <div className="space-y-2 pt-0.5">
+                      {q.options.map((opt, optIdx) => {
+                        const selected = answers[q.id] === opt
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => handleSingleChoice(q.id, opt)}
+                            className="w-full min-h-[48px] text-left px-4 py-3 rounded-md border text-[14px] transition-all duration-150 cursor-pointer flex items-center justify-between gap-3"
+                            style={
+                              selected
+                                ? {
+                                    borderColor: accentColor,
+                                    backgroundColor: `${accentColor}12`,
+                                    color: '#171716',
+                                    fontWeight: 500,
+                                  }
+                                : {
+                                    borderColor: categoryTheme.borderColor,
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#43423D',
+                                  }
+                            }
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span
+                                className="text-[11px] font-medium w-5 h-5 rounded-sm flex items-center justify-center shrink-0 border"
+                                style={
+                                  selected
+                                    ? {
+                                        borderColor: accentColor,
+                                        backgroundColor: accentColor,
+                                        color: '#FFFFFF',
+                                      }
+                                    : {
+                                        borderColor: categoryTheme.borderColor,
+                                        color: '#8C8A84',
+                                      }
+                                }
+                              >
+                                {OPTION_LETTERS[optIdx] || optIdx + 1}
+                              </span>
+                              <span className="break-words">{opt}</span>
+                            </div>
+
+                            <span
+                              className="w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
+                              style={{
+                                borderColor: selected
+                                  ? accentColor
+                                  : '#CFCBC4',
+                              }}
+                            >
+                              {selected && (
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: accentColor }}
+                                />
+                              )}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {q.type === 'multiple_choice' && (
+                    <div className="flex flex-wrap gap-2.5 pt-0.5">
+                      {q.options.map((opt) => {
+                        const selected =
+                          Array.isArray(answers[q.id]) &&
+                          answers[q.id].includes(opt)
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => handleMultipleChoice(q.id, opt)}
+                            className="min-h-[44px] px-4 py-2.5 rounded-md border text-[14px] transition-all duration-150 cursor-pointer inline-flex items-center gap-2"
+                            style={
+                              selected
+                                ? {
+                                    borderColor: accentColor,
+                                    backgroundColor: `${accentColor}14`,
+                                    color: '#171716',
+                                    fontWeight: 500,
+                                  }
+                                : {
+                                    borderColor: categoryTheme.borderColor,
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#43423D',
+                                  }
+                            }
+                          >
+                            <span
+                              className="w-4 h-4 rounded-xs border flex items-center justify-center shrink-0"
+                              style={
+                                selected
+                                  ? {
+                                      borderColor: accentColor,
+                                      backgroundColor: accentColor,
+                                      color: '#FFFFFF',
+                                    }
+                                  : {
+                                      borderColor: '#CFCBC4',
+                                      backgroundColor: '#FFFFFF',
+                                    }
+                              }
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                            </span>
+                            <span>{opt}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {q.type === 'short_text' && (
+                    <textarea
+                      rows={3}
+                      value={answers[q.id] || ''}
+                      onChange={(e) => handleShortText(q.id, e.target.value)}
+                      placeholder="Add any details in your own words (optional)..."
+                      className="w-full rounded-md border bg-white px-4 py-3 text-[15px] text-[#171716] placeholder:text-[#9C9A94] focus:outline-none transition-colors"
+                      style={{ borderColor: categoryTheme.borderColor }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {validationError && (
+            <div
+              role="alert"
+              className="rounded-md border border-error-border bg-error-light px-4 py-3 text-xs text-error"
+            >
+              {validationError}
+            </div>
+          )}
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full min-h-[48px] px-6 rounded-md text-sm font-medium text-white inline-flex items-center justify-center gap-2.5 transition-opacity hover:opacity-95 disabled:opacity-60 cursor-pointer"
+              style={{ backgroundColor: accentColor }}
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <span>Generate Review Draft</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Stage 2: Editorial Review Draft Composition */}
+      {step === 'draft' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div>
+              <p
+                className="text-[11px] font-medium uppercase tracking-[0.16em]"
+                style={{ color: accentColor }}
+              >
+                Ready to Share
+              </p>
+              <h2 className="text-2xl font-semibold text-[#171716] tracking-tight mt-1">
+                Your Review Draft
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-4 shrink-0">
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="text-xs font-medium text-[#666560] hover:text-[#171716] inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
+                />
+                <span>Regenerate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('questionnaire')}
+                className="text-xs font-medium text-[#666560] hover:text-[#171716] inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Edit answers</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Editorial pull-quote draft frame */}
+          <div
+            className="bg-white border rounded-md p-5 sm:p-6 border-l-[3px]"
+            style={{
+              borderColor: categoryTheme.borderColor,
+              borderLeftColor: accentColor,
+            }}
+          >
+            <textarea
+              ref={draftTextareaRef}
+              rows={5}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              aria-label="Editable review draft"
+              className="w-full bg-transparent text-[16px] sm:text-[17px] text-[#171716] leading-[1.7] focus:outline-none resize-y"
+            />
+            <p
+              className="text-xs text-[#8C8A84] mt-3 pt-3 border-t"
+              style={{ borderColor: categoryTheme.borderColor }}
+            >
+              Tap anywhere in the text above to personalize your words before
+              copying.
+            </p>
+          </div>
+
+          {copied && (
+            <div
+              className="rounded-md px-4 py-2.5 text-xs font-medium flex items-center gap-2"
+              style={{
+                backgroundColor: `${accentColor}14`,
+                color: accentColor,
+              }}
+            >
+              <Check className="w-4 h-4 shrink-0" />
+              <span>Review copied successfully! Paste it on Google Reviews.</span>
+            </div>
+          )}
+
+          {manualCopyHint && (
+            <p className="text-xs text-[#666560]">
+              Automatic clipboard access was blocked. Your draft is selected —
+              press Ctrl+C / Cmd+C to copy manually.
+            </p>
+          )}
+
+          <div className="space-y-3 pt-1">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="w-full min-h-[48px] px-5 rounded-md text-sm font-medium text-white inline-flex items-center justify-center gap-2 transition-opacity hover:opacity-95 cursor-pointer"
+              style={{ backgroundColor: accentColor }}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Review Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Review</span>
+                </>
+              )}
+            </button>
+
+            {business?.reviewConfig?.googleReviewUrl ? (
+              <a
+                href={isPreview ? undefined : business.reviewConfig.googleReviewUrl}
+                target={isPreview ? undefined : '_blank'}
+                rel={isPreview ? undefined : 'noopener noreferrer'}
+                onClick={(e) => {
+                  if (isPreview) {
+                    e.preventDefault()
+                    return
+                  }
+                  onGoogleRedirect?.()
+                }}
+                className="w-full min-h-[48px] px-5 rounded-md border bg-white text-sm font-medium text-[#171716] hover:bg-[#F5F4F0] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                style={{ borderColor: categoryTheme.borderColor }}
+              >
+                <span>Continue to Google Reviews</span>
+                <ExternalLink className="w-4 h-4 text-[#787670]" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="w-full min-h-[44px] px-4 rounded-md bg-[#EFECE6] text-[#8C8A84] text-sm font-medium cursor-not-allowed"
+              >
+                Google Review URL Not Configured
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+
+  // ── Split-Screen Editorial Layout (Desktop Centered Mode) ──
+  if (useSplitDesktop) {
+    return (
+      <div
+        className="min-h-screen text-[#171716] flex flex-col lg:grid lg:grid-cols-12"
+        style={{
+          backgroundColor: categoryTheme.paperBg,
+          fontFamily: getFontStack(fontFamily),
+        }}
+      >
+        {/* Left Editorial Brand Identity Column */}
+        <aside
+          className="lg:col-span-5 lg:sticky lg:top-0 lg:h-screen flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-12 lg:py-14 border-b lg:border-b-0 lg:border-r relative"
+          style={{
+            backgroundColor: categoryTheme.surfaceTint,
+            borderColor: categoryTheme.borderColor,
+          }}
+        >
+          {/* Top accent rule */}
+          <div
+            className="absolute top-0 left-0 right-0 h-[3px]"
+            style={{ backgroundColor: accentColor }}
+          />
+
+          <div className="space-y-6 lg:space-y-8 pt-2">
+            {renderBrandIdentity()}
+
+            {business?.reviewConfig?.welcomeMessage && (
+              <div
+                className={`pt-5 border-t ${
+                  isCentered ? 'text-center mx-auto max-w-md' : 'text-left'
+                }`}
+                style={{ borderColor: categoryTheme.borderColor }}
+              >
+                <p className="text-[15px] sm:text-base text-[#4A4944] leading-relaxed">
+                  {business.reviewConfig.welcomeMessage}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="hidden lg:block space-y-6">
+            {renderProgressBlock()}
+            <div
+              className="pt-5 border-t flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-[#8C8A84]"
+              style={{ borderColor: categoryTheme.borderColor }}
+            >
+              <span>{categoryTheme.kicker}</span>
+              <span>ReviewBuddy</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Right Interactive Column */}
+        <main className="lg:col-span-7 flex flex-col justify-between px-5 py-8 sm:px-10 lg:px-16 lg:py-16">
+          <div className="w-full max-w-[560px] mx-auto my-auto">
+            {renderInteractiveStage()}
+          </div>
+
+          <footer className="lg:hidden mt-12 pt-6 border-t border-[#E6E4DF] text-center">
+            <p className="text-[11px] tracking-[0.14em] uppercase text-[#9C9A94]">
+              ReviewBuddy
+            </p>
+          </footer>
+        </main>
+      </div>
+    )
+  }
+
+  // ── Compact / Preview Single-Column Editorial Layout ──
   return (
     <div
-      className={`bg-[#FAF9F6] text-[#171716] ${
-        isPreview ? 'rounded-md border border-border overflow-hidden' : 'min-h-screen'
+      className={`text-[#171716] ${
+        isPreview
+          ? 'rounded-md border border-border overflow-hidden'
+          : 'min-h-screen'
       }`}
-      style={{ fontFamily: getFontStack(fontFamily) }}
+      style={{
+        backgroundColor: categoryTheme.paperBg,
+        fontFamily: getFontStack(fontFamily),
+      }}
     >
-      {/* Top editorial accent hairline */}
       <div
         className="h-[3px] w-full transition-colors duration-200"
         style={{ backgroundColor: accentColor }}
       />
 
       <div
-        className={`mx-auto w-full max-w-[560px] px-5 sm:px-6 ${
-          isPreview
-            ? isCompact
-              ? 'py-5'
-              : 'py-7'
-            : isCompact
-              ? 'py-7 sm:py-10'
-              : 'py-10 sm:py-16'
+        className={`mx-auto w-full max-w-[600px] px-5 sm:px-7 ${
+          isPreview ? 'py-5' : 'py-8 sm:py-12'
         }`}
       >
-        {/* A. Editorial Business Identity & Welcome */}
         <header
-          className={`${
-            isCompact ? 'pb-6 mb-6' : 'pb-8 mb-8'
-          } border-b border-[#E6E4DF]`}
+          className={`${isCompact ? 'pb-5 mb-6' : 'pb-7 mb-7'} border-b`}
+          style={{ borderColor: categoryTheme.borderColor }}
         >
-          <div
-            className={`flex gap-4 ${
-              isAbove ? 'flex-col' : 'flex-row items-center'
-            } ${
-              isCentered
-                ? isAbove
-                  ? 'items-center text-center'
-                  : 'justify-center text-left'
-                : 'items-start text-left'
-            }`}
-          >
-            {hasLogo && (
-              <BusinessLogo
-                logoUrl={business?.logoUrl}
-                logoText={business?.logoText}
-                name={business?.name}
-                size={isCompact ? 'md' : 'lg'}
-                className="border-[#E6E4DF]"
-              />
-            )}
-
-            <div className="min-w-0">
-              {locationLine && (
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#787670] mb-1">
-                  {locationLine}
-                </p>
-              )}
-              <h1
-                className={`${
-                  isCompact ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-[28px]'
-                } font-semibold tracking-tight text-[#171716] leading-tight break-words`}
-              >
-                {business?.name}
-              </h1>
-            </div>
-          </div>
+          {renderBrandIdentity()}
 
           {business?.reviewConfig?.welcomeMessage && (
             <p
@@ -242,306 +722,13 @@ export default function PublicReviewExperience({
           )}
         </header>
 
-        {/* B. Questionnaire Section */}
-        {step === 'questionnaire' && (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {questions.length > 1 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-[#787670]">
-                  <span className="uppercase tracking-[0.1em] font-medium">
-                    Your Experience
-                  </span>
-                  <span className="tabular-nums">
-                    {answeredCount} / {questions.length}
-                  </span>
-                </div>
-                <div className="h-[3px] w-full bg-[#EAE8E3] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${progressPct}%`,
-                      backgroundColor: accentColor,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+        {renderInteractiveStage()}
 
-            {questions.length === 0 ? (
-              <div className="space-y-3 py-2">
-                <label className="block text-sm font-medium text-[#171716]">
-                  Share a few words about your visit
-                </label>
-                <textarea
-                  rows={4}
-                  value={answers.general || ''}
-                  onChange={(e) => handleShortText('general', e.target.value)}
-                  placeholder="Write your thoughts here..."
-                  className="w-full rounded-md border border-[#DCDAD4] bg-white px-3.5 py-3 text-[15px] text-[#171716] placeholder:text-[#9C9A94] focus:outline-none focus:border-[#171716]"
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-[#E6E4DF]">
-                {questions.map((q, index) => (
-                  <div
-                    key={q.id}
-                    className={`${
-                      index === 0 ? 'pt-1' : isCompact ? 'pt-5' : 'pt-7'
-                    } ${isCompact ? 'pb-5' : 'pb-7'} space-y-3.5`}
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <div className="flex items-baseline gap-2.5">
-                        <span className="text-xs font-medium text-[#8C8A84] tabular-nums">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                        <label className="text-[15px] font-medium text-[#171716] leading-snug">
-                          {q.text}
-                        </label>
-                      </div>
-                      <span className="text-[11px] uppercase tracking-wider text-[#8C8A84] shrink-0">
-                        {q.required ? 'Required' : 'Optional'}
-                      </span>
-                    </div>
-
-                    {q.type === 'single_choice' && (
-                      <div className="space-y-2">
-                        {q.options.map((opt) => {
-                          const selected = answers[q.id] === opt
-                          return (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => handleSingleChoice(q.id, opt)}
-                              className="w-full min-h-[44px] text-left px-4 py-2.5 rounded-md border text-sm transition-all duration-150 cursor-pointer flex items-center justify-between gap-3"
-                              style={
-                                selected
-                                  ? {
-                                      borderColor: accentColor,
-                                      backgroundColor: `${accentColor}12`,
-                                      color: '#171716',
-                                      fontWeight: 500,
-                                    }
-                                  : {
-                                      borderColor: '#E2E0DA',
-                                      backgroundColor: '#FFFFFF',
-                                      color: '#4A4944',
-                                    }
-                              }
-                            >
-                              <span>{opt}</span>
-                              <span
-                                className="w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                                style={{
-                                  borderColor: selected ? accentColor : '#CFCBC4',
-                                }}
-                              >
-                                {selected && (
-                                  <span
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: accentColor }}
-                                  />
-                                )}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {q.type === 'multiple_choice' && (
-                      <div className="flex flex-wrap gap-2">
-                        {q.options.map((opt) => {
-                          const selected =
-                            Array.isArray(answers[q.id]) &&
-                            answers[q.id].includes(opt)
-                          return (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => handleMultipleChoice(q.id, opt)}
-                              className="min-h-[42px] px-4 py-2 rounded-md border text-sm transition-all duration-150 cursor-pointer inline-flex items-center gap-2"
-                              style={
-                                selected
-                                  ? {
-                                      borderColor: accentColor,
-                                      backgroundColor: `${accentColor}12`,
-                                      color: '#171716',
-                                      fontWeight: 500,
-                                    }
-                                  : {
-                                      borderColor: '#E2E0DA',
-                                      backgroundColor: '#FFFFFF',
-                                      color: '#4A4944',
-                                    }
-                              }
-                            >
-                              {selected && (
-                                <Check
-                                  className="w-3.5 h-3.5 shrink-0"
-                                  style={{ color: accentColor }}
-                                />
-                              )}
-                              <span>{opt}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {q.type === 'short_text' && (
-                      <textarea
-                        rows={3}
-                        value={answers[q.id] || ''}
-                        onChange={(e) => handleShortText(q.id, e.target.value)}
-                        placeholder="Add any details in your own words (optional)..."
-                        className="w-full rounded-md border border-[#E2E0DA] bg-white px-3.5 py-2.5 text-sm text-[#171716] placeholder:text-[#9C9A94] focus:outline-none focus:border-[#171716]"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {validationError && (
-              <div
-                role="alert"
-                className="rounded-md border border-error-border bg-error-light px-3.5 py-2.5 text-xs text-error"
-              >
-                {validationError}
-              </div>
-            )}
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full min-h-[46px] px-5 rounded-md text-sm font-medium text-white inline-flex items-center justify-center gap-2 transition-opacity hover:opacity-95 disabled:opacity-60 cursor-pointer"
-                style={{ backgroundColor: accentColor }}
-              >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>Generate Review Draft</span>
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* C. Review Generation & Preview Section */}
-        {step === 'draft' && (
-          <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#787670]">
-                  Ready to Share
-                </p>
-                <h2 className="text-xl font-semibold text-[#171716] tracking-tight mt-1">
-                  Your Review Draft
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-3 pt-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  className="text-xs text-[#666560] hover:text-[#171716] inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
-                  />
-                  <span>Regenerate</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep('questionnaire')}
-                  className="text-xs text-[#666560] hover:text-[#171716] inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Edit answers</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white border border-[#E2E0DA] rounded-md p-4">
-              <textarea
-                ref={draftTextareaRef}
-                rows={5}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                aria-label="Editable review draft"
-                className="w-full bg-transparent text-[15px] text-[#171716] leading-relaxed focus:outline-none resize-y"
-              />
-              <p className="text-[11px] text-[#8C8A84] mt-2 pt-2 border-t border-[#F0EEE9]">
-                You can edit this draft freely before copying and posting on
-                Google.
-              </p>
-            </div>
-
-            {copied && (
-              <p className="text-xs font-medium" style={{ color: accentColor }}>
-                Review copied successfully!
-              </p>
-            )}
-
-            {manualCopyHint && (
-              <p className="text-xs text-[#666560]">
-                Automatic clipboard access was blocked. Your draft is selected —
-                press Ctrl+C / Cmd+C to copy manually.
-              </p>
-            )}
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="w-full min-h-[46px] px-5 rounded-md text-sm font-medium text-white inline-flex items-center justify-center gap-2 transition-opacity hover:opacity-95 cursor-pointer"
-                style={{ backgroundColor: accentColor }}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Review Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>Copy Review</span>
-                  </>
-                )}
-              </button>
-
-              {business?.reviewConfig?.googleReviewUrl ? (
-                <a
-                  href={isPreview ? undefined : business.reviewConfig.googleReviewUrl}
-                  target={isPreview ? undefined : '_blank'}
-                  rel={isPreview ? undefined : 'noopener noreferrer'}
-                  onClick={(e) => {
-                    if (isPreview) {
-                      e.preventDefault()
-                      return
-                    }
-                    onGoogleRedirect?.()
-                  }}
-                  className="w-full min-h-[46px] px-5 rounded-md border border-[#DCDAD4] bg-white text-sm font-medium text-[#171716] hover:bg-[#F5F4F0] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <span>Continue to Google Reviews</span>
-                  <ExternalLink className="w-4 h-4 text-[#787670]" />
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="w-full min-h-[44px] px-4 rounded-md bg-[#EFECE6] text-[#8C8A84] text-sm font-medium cursor-not-allowed"
-                >
-                  Google Review URL Not Configured
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* E. Minimal Footer */}
-        <footer className="mt-12 pt-6 border-t border-[#EAE8E3] text-center">
-          <p className="text-[11px] tracking-wider uppercase text-[#9C9A94]">
+        <footer
+          className="mt-10 pt-5 border-t text-center"
+          style={{ borderColor: categoryTheme.borderColor }}
+        >
+          <p className="text-[11px] tracking-[0.14em] uppercase text-[#9C9A94]">
             ReviewBuddy
           </p>
         </footer>

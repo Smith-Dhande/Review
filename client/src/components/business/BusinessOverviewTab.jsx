@@ -5,6 +5,7 @@ import { Check, Copy, Download, ExternalLink } from 'lucide-react'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 import StatusText from '../ui/StatusText'
+import BusinessLogo from '../ui/BusinessLogo'
 import LogoUpload from '../ui/LogoUpload'
 import QrPreviewSvg from './QrPreviewSvg'
 import { getPublicReviewUrl } from '../../context/BusinessesContext'
@@ -184,10 +185,16 @@ export default function BusinessOverviewTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Business Information */}
       <div className="lg:col-span-2 bg-card rounded-lg border border-border">
-        <div className="px-6 py-4 border-b border-border">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
           <h3 className="text-sm font-semibold text-text-primary">
             Business Information
           </h3>
+          <BusinessLogo
+            logoUrl={business.logoUrl}
+            logoText={business.logoText}
+            name={business.name}
+            size="sm"
+          />
         </div>
         <dl className="divide-y divide-border">
           <div className="px-6 py-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2">

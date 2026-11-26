@@ -4,6 +4,7 @@ import PageHeader from '../components/ui/PageHeader'
 import ChartCard from '../components/ui/ChartCard'
 import DataTable from '../components/ui/DataTable'
 import StatusText from '../components/ui/StatusText'
+import BusinessLogo from '../components/ui/BusinessLogo'
 import ScanActivityChart from '../components/charts/ScanActivityChart'
 import CustomerJourneyCard from '../components/charts/CustomerJourneyCard'
 import { useBusinesses } from '../context/BusinessesContext'
@@ -105,9 +106,12 @@ export default function DashboardPage() {
         label: 'Business',
         render: (_, row) => (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-surface border border-border flex items-center justify-center text-xs font-semibold text-text-primary shrink-0">
-              {row.logoText}
-            </div>
+            <BusinessLogo
+              logoUrl={row.logoUrl}
+              logoText={row.logoText}
+              name={row.name}
+              size="sm"
+            />
             <div>
               <p className="font-medium text-text-primary">{row.name}</p>
               <p className="text-xs text-text-tertiary">
