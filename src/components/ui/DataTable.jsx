@@ -1,0 +1,160 @@
+import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import SearchInput from './SearchInput'
+import LoadingState from './LoadingState'
+import EmptyState from './EmptyState'
+
+export default function DataTable({
+  columns = [],
+  data = [],
+  searchable = false,
+  searchValue = '',
+  onSearchChange,
+  searchPlaceholder = 'Search...',
+  loading = false,
+  emptyIcon,
+  emptyTitle = 'No data found',
+  emptyDescription = 'There are no records to display.',
+  pagination = true,
+}) {
+  const [currentPage, setCurrentPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+
+  const safeData = Array.isArray(data) ? data : []
+  const totalItems = safeData.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage))
+  const safePage = Math.min(currentPage, totalPages)
+
+  const startIndex = pagination ? (safePage - 1) * rowsPerPage : 0
+  const endIndex = pagination
+    ? Math.min(startIndex + rowsPerPage, totalItems)
+    : totalItems
+  const displayedData = pagination
+    ? safeData.slice(startIndex, endIndex)
+    : safeData
+
+  const handleRowsPerPageChange = (event) => {
+    setRowsPerPage(Number(event.target.value))
+    setCurrentPage(1)
+  }
+
+  const handleSearchChange = (event) => {
+    setCurrentPage(1)
+    if (onSearchChange) {
+      const nextValue =
+        typeof event === 'string' ? event : event?.target?.value ?? ''
+      onSearchChange(nextValue)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {searchable && (
+        <div className="max-w-sm">
+          <SearchInput
+            value={searchValue}
+            onChange={handleSearchChange}
+            placeholder={searchPlaceholder}
+          />
+        </div>
+      )}
+
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
+        {loading ? (
+          <LoadingState />
+        ) : totalItems === 0 ? (
+          <EmptyState
+            icon={emptyIcon}
+            title={emptyTitle}
+            description={emptyDescription}
+          />
+        ) : (
+          <>
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="border-b border-border">
+                  <tr>
+                    {columns.map((column) => (
+                      <th
+                        key={column.key}
+                        className="px-4 py-3 text-xs font-medium text-text-tertiary uppercase tracking-wider text-left whitespace-nowrap"
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedData.map((row, rowIndex) => (
+                    <tr
+                      key={row.id ?? row._id ?? startIndex + rowIndex}
+                      className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors duration-150"
+                    >
+                      {columns.map((column) => {
+                        const value = row[column.key]
+                        return (
+                          <td
+                            key={column.key}
+                            className="px-4 py-3.5 text-text-primary whitespace-nowrap"
+                          >
+                            {column.render ? column.render(value, row) : value}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {pagination && (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-border bg-card text-xs text-text-secondary">
+                <div className="flex items-center gap-2">
+                  <span>Rows per page</span>
+                  <select
+                    aria-label="Rows per page"
+                    value={rowsPerPage}
+                    onChange={handleRowsPerPageChange}
+                    className="rounded-md border border-border bg-white px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors duration-150"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between sm:justify-end gap-4">
+                  <span>
+                    {startIndex + 1}-{endIndex} of {totalItems}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={safePage <= 1}
+                      aria-label="Previous page"
+                      className="p-1.5 rounded-md border border-border bg-white text-text-primary hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                      }
+                      disabled={safePage >= totalPages}
+                      aria-label="Next page"
+                      className="p-1.5 rounded-md border border-border bg-white text-text-primary hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
