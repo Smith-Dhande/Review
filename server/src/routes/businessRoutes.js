@@ -1,5 +1,7 @@
 import { Router } from 'express'
-import { requireAdmin } from '../middleware/auth.js'
+import { requireAuth } from '../middleware/requireAuth.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
+import { requireCsrf } from '../middleware/csrfProtection.js'
 import {
   createBusinessRecord,
   findBusinessByAnyId,
@@ -11,20 +13,16 @@ import {
   generateQrPngBuffer,
   generateQrSvgString,
 } from '../services/qrService.js'
-import { saveLogoAsset } from '../services/logoService.js'
+import { classifyQuestion } from '../services/reviewGeneration/questionClassifier.js'
 
 const router = Router()
 
-router.use(requireAdmin)
+router.use(requireAuth, requireAdmin, requireCsrf)
 
-router.post('/upload-logo', async (req, res, next) => {
-  try {
-    const { mimeType, dataBase64 } = req.body || {}
-    const result = await saveLogoAsset({ mimeType, dataBase64 })
-    return res.status(201).json(result)
-  } catch (err) {
-    return next(err)
-  }
+router.post('/classify-question', (req, res) => {
+  const text = String(req.body?.text || '')
+  const result = classifyQuestion(text)
+  return res.json(result)
 })
 
 router.get('/', async (_req, res, next) => {

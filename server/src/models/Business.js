@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { ALLOWED_QUESTION_CATEGORIES } from '../services/reviewGeneration/questionClassifier.js'
 
 export const ALLOWED_TONES = [
   'Natural and Conversational',
@@ -33,6 +34,12 @@ const questionSchema = new mongoose.Schema(
   {
     id: { type: String, required: true },
     text: { type: String, required: true, trim: true, maxlength: 240 },
+    category: {
+      type: String,
+      enum: ALLOWED_QUESTION_CATEGORIES,
+      default: 'custom',
+    },
+    customContext: { type: String, trim: true, default: '', maxlength: 160 },
     type: {
       type: String,
       enum: ['single_choice', 'multiple_choice', 'short_text'],
@@ -62,7 +69,13 @@ const businessSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 140 },
     slug: { type: String, trim: true },
     logoText: { type: String, trim: true, maxlength: 4 },
-    logoUrl: { type: String, trim: true, default: '' },
+    logo: {
+      url: { type: String, trim: true, default: '' },
+      publicId: { type: String, trim: true, default: '' },
+      format: { type: String, trim: true, default: '' },
+      width: { type: Number, default: 0 },
+      height: { type: Number, default: 0 },
+    },
     category: { type: String, trim: true, default: 'Other' },
     location: { type: String, trim: true, default: '', maxlength: 160 },
     address: { type: String, trim: true, default: '', maxlength: 260 },
@@ -111,6 +124,15 @@ const businessSchema = new mongoose.Schema(
     analytics: {
       totalScans: { type: Number, default: 0 },
       landingViews: { type: Number, default: 0 },
+      totalInitialRatings: { type: Number, default: 0 },
+      ratingSum: { type: Number, default: 0 },
+      ratingDistribution: {
+        1: { type: Number, default: 0 },
+        2: { type: Number, default: 0 },
+        3: { type: Number, default: 0 },
+        4: { type: Number, default: 0 },
+        5: { type: Number, default: 0 },
+      },
       questionnaireStarts: { type: Number, default: 0 },
       questionnaireCompletions: { type: Number, default: 0 },
       reviewDraftsGenerated: { type: Number, default: 0 },

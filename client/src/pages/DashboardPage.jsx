@@ -35,6 +35,8 @@ export default function DashboardPage() {
         if (biz.status === 'paused') acc.paused += 1
         acc.totalScans += biz.analytics?.totalScans || 0
         acc.landingViews += biz.analytics?.landingViews || 0
+        acc.totalRatings += biz.analytics?.totalInitialRatings || 0
+        acc.ratingSum += biz.analytics?.ratingSum || 0
         acc.completions += biz.analytics?.questionnaireCompletions || 0
         acc.drafts += biz.analytics?.reviewDraftsGenerated || 0
         acc.copies += biz.analytics?.copyClicks || 0
@@ -47,6 +49,8 @@ export default function DashboardPage() {
         paused: 0,
         totalScans: 0,
         landingViews: 0,
+        totalRatings: 0,
+        ratingSum: 0,
         completions: 0,
         drafts: 0,
         copies: 0,
@@ -55,12 +59,22 @@ export default function DashboardPage() {
     )
   }, [businesses])
 
+  const avgInitialRating =
+    liveCounts.totalRatings > 0
+      ? `${(liveCounts.ratingSum / liveCounts.totalRatings).toFixed(1)} / 5`
+      : '—'
+
   const metrics = useMemo(
     () => [
       { label: 'Total Businesses', value: liveCounts.total.toLocaleString() },
       { label: 'Active Businesses', value: liveCounts.active.toLocaleString() },
       { label: 'Paused Businesses', value: liveCounts.paused.toLocaleString() },
       { label: 'Total Scans', value: liveCounts.totalScans.toLocaleString() },
+      {
+        label: 'Initial Ratings',
+        value: liveCounts.totalRatings.toLocaleString(),
+        hint: `Avg ${avgInitialRating}`,
+      },
       {
         label: 'Questionnaire Completions',
         value: liveCounts.completions.toLocaleString(),
@@ -69,20 +83,20 @@ export default function DashboardPage() {
         label: 'Review Drafts Generated',
         value: liveCounts.drafts.toLocaleString(),
       },
-      { label: 'Copy Clicks', value: liveCounts.copies.toLocaleString() },
       {
         label: 'Google Review Redirects',
         value: liveCounts.redirects.toLocaleString(),
-        hint: 'Outbound clicks',
+        hint: `${liveCounts.copies.toLocaleString()} copies`,
       },
     ],
-    [liveCounts],
+    [liveCounts, avgInitialRating],
   )
 
   const liveJourney = useMemo(
     () => [
       { stage: 'Total Scans', count: liveCounts.totalScans },
       { stage: 'Landing-Page Views', count: liveCounts.landingViews },
+      { stage: 'Initial Ratings', count: liveCounts.totalRatings },
       { stage: 'Questionnaire Completions', count: liveCounts.completions },
       { stage: 'Review Drafts Generated', count: liveCounts.drafts },
       { stage: 'Copy Clicks', count: liveCounts.copies },
@@ -107,6 +121,7 @@ export default function DashboardPage() {
         render: (_, row) => (
           <div className="flex items-center gap-3">
             <BusinessLogo
+              logo={row.logo}
               logoUrl={row.logoUrl}
               logoText={row.logoText}
               name={row.name}

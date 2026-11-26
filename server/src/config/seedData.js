@@ -67,6 +67,9 @@ export function seedBusinesses() {
       analytics: {
         totalScans: 612,
         landingViews: 574,
+        totalInitialRatings: 520,
+        ratingSum: 2340,
+        ratingDistribution: { 1: 12, 2: 18, 3: 45, 4: 135, 5: 310 },
         questionnaireStarts: 495,
         questionnaireCompletions: 468,
         reviewDraftsGenerated: 439,
@@ -125,6 +128,9 @@ export function seedBusinesses() {
       analytics: {
         totalScans: 843,
         landingViews: 790,
+        totalInitialRatings: 725,
+        ratingSum: 3190,
+        ratingDistribution: { 1: 18, 2: 27, 3: 75, 4: 195, 5: 410 },
         questionnaireStarts: 690,
         questionnaireCompletions: 642,
         reviewDraftsGenerated: 601,
@@ -179,6 +185,9 @@ export function seedBusinesses() {
       analytics: {
         totalScans: 95,
         landingViews: 84,
+        totalInitialRatings: 78,
+        ratingSum: 320,
+        ratingDistribution: { 1: 3, 2: 5, 3: 14, 4: 26, 5: 30 },
         questionnaireStarts: 74,
         questionnaireCompletions: 68,
         reviewDraftsGenerated: 62,

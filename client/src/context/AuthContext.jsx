@@ -1,20 +1,41 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import { authApi } from '../services/api'
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react'
+import { authApi, setCsrfToken } from '../services/api'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('rb_user')
-      const token = localStorage.getItem('rb_token')
-      return stored && token ? JSON.parse(stored) : null
-    } catch {
-      return null
-    }
-  })
+  const [user, setUser] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let active = true
+
+    authApi
+      .me()
+      .then((data) => {
+        if (!active) return
+        setUser(data.user || null)
+      })
+      .catch(() => {
+        if (!active) return
+        setUser(null)
+      })
+      .finally(() => {
+        if (active) setIsCheckingAuth(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const login = useCallback(async (email, password) => {
     setIsLoading(true)
@@ -22,12 +43,10 @@ export function AuthProvider({ children }) {
 
     try {
       const data = await authApi.login(email, password)
-      localStorage.setItem('rb_token', data.token)
-      localStorage.setItem('rb_user', JSON.stringify(data.user))
       setUser(data.user)
       return true
     } catch (err) {
-      setError(err.message || 'Invalid email or password')
+      setError(err.message || 'Invalid email or password.')
       return false
     } finally {
       setIsLoading(false)
@@ -40,17 +59,36 @@ export function AuthProvider({ children }) {
     } catch {
       // Ignore network errors on logout
     }
-    localStorage.removeItem('rb_token')
-    localStorage.removeItem('rb_user')
+    setCsrfToken(null)
     setUser(null)
     setError(null)
   }, [])
+
+  const changePassword = useCallback(
+    async ({ currentPassword, newPassword, confirmPassword }) => {
+      return authApi.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      })
+    },
+    [],
+  )
 
   const clearError = useCallback(() => setError(null), [])
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, error, login, logout, clearError }}
+      value={{
+        user,
+        isCheckingAuth,
+        isLoading,
+        error,
+        login,
+        logout,
+        changePassword,
+        clearError,
+      }}
     >
       {children}
     </AuthContext.Provider>

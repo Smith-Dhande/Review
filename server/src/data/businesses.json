@@ -1,5 +1,60 @@
 [
   {
+    "publicId": "cloud-bistro-685d16",
+    "qrPublicUrl": "http://localhost:5173/review/cloud-bistro-685d16",
+    "name": "Cloud Bistro",
+    "slug": "cloud-bistro",
+    "logoText": "CB",
+    "logo": {
+      "url": "",
+      "publicId": "",
+      "format": "",
+      "width": 0,
+      "height": 0
+    },
+    "category": "Restaurant",
+    "location": "",
+    "address": "",
+    "phone": "",
+    "email": "",
+    "status": "active",
+    "reviewConfig": {
+      "googleReviewUrl": "",
+      "welcomeMessage": "Thanks for visiting Cloud Bistro! Answer a few quick questions to draft your review.",
+      "tone": "Natural and Conversational",
+      "length": "Medium",
+      "autoCopyPrompt": true
+    },
+    "appearance": {
+      "accentColor": "#1B6B4A",
+      "fontFamily": "Inter",
+      "businessNameAlignment": "left",
+      "logoPlacement": "beside",
+      "layoutStyle": "centered"
+    },
+    "questions": [],
+    "analytics": {
+      "totalScans": 0,
+      "landingViews": 0,
+      "totalInitialRatings": 0,
+      "ratingSum": 0,
+      "ratingDistribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "questionnaireStarts": 0,
+      "questionnaireCompletions": 0,
+      "reviewDraftsGenerated": 0,
+      "copyClicks": 0,
+      "googleReviewRedirects": 0
+    },
+    "createdAt": "2026-11-26T12:25:30.744Z",
+    "updatedAt": "2026-11-26T12:25:30.847Z"
+  },
+  {
     "publicId": "bistro-verde-acbe62",
     "qrPublicUrl": "http://localhost:5173/review/bistro-verde-acbe62",
     "name": "Bistro Verde",
@@ -165,16 +220,25 @@
       }
     ],
     "analytics": {
-      "totalScans": 7,
-      "landingViews": 7,
-      "questionnaireStarts": 1,
-      "questionnaireCompletions": 1,
-      "reviewDraftsGenerated": 1,
-      "copyClicks": 1,
-      "googleReviewRedirects": 1
+      "totalScans": 14,
+      "landingViews": 14,
+      "questionnaireStarts": 2,
+      "questionnaireCompletions": 2,
+      "reviewDraftsGenerated": 2,
+      "copyClicks": 2,
+      "googleReviewRedirects": 2,
+      "totalInitialRatings": 2,
+      "ratingSum": 8,
+      "ratingDistribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 2,
+        "5": 0
+      }
     },
     "createdAt": "2026-11-26T10:46:53.661Z",
-    "updatedAt": "2026-11-26T11:18:08.531Z"
+    "updatedAt": "2026-11-26T11:55:39.054Z"
   },
   {
     "publicId": "test-dental-beta-16e9d8",
@@ -467,13 +531,22 @@
       "totalScans": 612,
       "landingViews": 574,
       "questionnaireStarts": 495,
-      "questionnaireCompletions": 468,
-      "reviewDraftsGenerated": 439,
+      "questionnaireCompletions": 469,
+      "reviewDraftsGenerated": 440,
       "copyClicks": 362,
-      "googleReviewRedirects": 318
+      "googleReviewRedirects": 318,
+      "totalInitialRatings": 1,
+      "ratingSum": 4,
+      "ratingDistribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 1,
+        "5": 0
+      }
     },
     "createdAt": "2026-03-15T09:00:00.000Z",
-    "updatedAt": "2026-11-26T10:31:03.616Z"
+    "updatedAt": "2026-11-26T11:38:15.163Z"
   },
   {
     "publicId": "spice-garden",

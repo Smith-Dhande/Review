@@ -14,6 +14,7 @@ export default function PublicReviewPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   const trackedLandingRef = useRef(null)
+  const trackedRatingRef = useRef(false)
   const trackedStartRef = useRef(false)
   const trackedCopyRef = useRef(false)
   const trackedRedirectRef = useRef(false)
@@ -130,6 +131,14 @@ export default function PublicReviewPage() {
   return (
     <PublicReviewExperience
       business={business}
+      onRatingContinue={(rating) => {
+        if (!trackedRatingRef.current && business?.publicId) {
+          trackedRatingRef.current = true
+          publicReviewApi
+            .trackEvent(business.publicId, 'initialRating', { rating })
+            .catch(() => {})
+        }
+      }}
       onFirstInteraction={() => {
         if (!trackedStartRef.current && business?.publicId) {
           trackedStartRef.current = true
@@ -138,19 +147,17 @@ export default function PublicReviewPage() {
             .catch(() => {})
         }
       }}
-      onGenerateDraft={async (answers) => {
+      onGenerateDraft={async ({ rating, answers }) => {
         const res = await publicReviewApi.completeQuestionnaire(
           business.publicId,
-          answers,
-          false,
+          { rating, answers, isRegenerate: false },
         )
         return res.draft
       }}
-      onRegenerateDraft={async (answers) => {
+      onRegenerateDraft={async ({ rating, answers }) => {
         const res = await publicReviewApi.completeQuestionnaire(
           business.publicId,
-          answers,
-          true,
+          { rating, answers, isRegenerate: true },
         )
         return res.draft
       }}

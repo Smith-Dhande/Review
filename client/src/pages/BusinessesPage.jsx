@@ -23,7 +23,7 @@ const formatDate = (dateStr) => {
 
 const initialFormState = {
   name: '',
-  logoUrl: '',
+  logo: null,
   category: businessCategories[0] || 'Restaurant',
   location: '',
   address: '',
@@ -77,7 +77,7 @@ export default function BusinessesPage() {
     setEditingId(business.id)
     setFormData({
       name: business.name || '',
-      logoUrl: business.logoUrl || '',
+      logo: business.logo?.url ? business.logo : null,
       category: business.category || businessCategories[0],
       location: business.location || '',
       address: business.address || '',
@@ -114,7 +114,7 @@ export default function BusinessesPage() {
       if (editingId) {
         await updateBusiness(editingId, {
           name: formData.name,
-          logoUrl: formData.logoUrl,
+          logo: formData.logo,
           category: formData.category,
           location: formData.location,
           address: formData.address,
@@ -140,6 +140,7 @@ export default function BusinessesPage() {
       render: (_, row) => (
         <div className="flex items-center gap-3">
           <BusinessLogo
+            logo={row.logo}
             logoUrl={row.logoUrl}
             logoText={row.logoText}
             name={row.name}
@@ -251,10 +252,8 @@ export default function BusinessesPage() {
         <form onSubmit={handleSave}>
           <div className="mb-4">
             <LogoUpload
-              value={formData.logoUrl}
-              onChange={(url) =>
-                setFormData((prev) => ({ ...prev, logoUrl: url }))
-              }
+              value={formData.logo}
+              onChange={(logo) => setFormData((prev) => ({ ...prev, logo }))}
             />
           </div>
 

@@ -83,6 +83,7 @@ export default function BusinessDetailsPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-4">
           <BusinessLogo
+            logo={business.logo}
             logoUrl={business.logoUrl}
             logoText={business.logoText}
             name={business.name}

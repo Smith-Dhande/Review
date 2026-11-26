@@ -3,12 +3,27 @@ import { useAuth } from './context/AuthContext'
 import { BusinessesProvider } from './context/BusinessesContext'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
+import LoadingState from './components/ui/LoadingState'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import BusinessesPage from './pages/BusinessesPage'
 import BusinessDetailsPage from './pages/BusinessDetailsPage'
 import SettingsPage from './pages/SettingsPage'
 import PublicReviewPage from './pages/PublicReviewPage'
+
+function LoginRoute() {
+  const { user, isCheckingAuth } = useAuth()
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <LoadingState message="Checking session..." />
+      </div>
+    )
+  }
+
+  return user ? <Navigate to="/dashboard" replace /> : <LoginPage />
+}
 
 export default function App() {
   const { user } = useAuth()
@@ -20,10 +35,7 @@ export default function App() {
         <Route path="/review/:businessId" element={<PublicReviewPage />} />
 
         {/* Login — only accessible when logged out */}
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />}
-        />
+        <Route path="/login" element={<LoginRoute />} />
 
         {/* Protected authenticated application */}
         <Route

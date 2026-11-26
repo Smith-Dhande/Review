@@ -10,6 +10,43 @@ import Business, {
 import { readLocalStore, usingMongo, writeLocalStore } from '../config/db.js'
 import { buildQrPublicUrl } from '../config/seedData.js'
 import { sanitizeText } from '../services/reviewGenerator.js'
+import { deleteImageAsset } from '../services/imageStorageService.js'
+import {
+  ALLOWED_QUESTION_CATEGORIES,
+  classifyQuestion,
+} from '../services/reviewGeneration/questionClassifier.js'
+
+const EMPTY_LOGO = {
+  url: '',
+  publicId: '',
+  format: '',
+  width: 0,
+  height: 0,
+}
+
+export function normalizeLogo(input) {
+  if (!input || typeof input !== 'object') return { ...EMPTY_LOGO }
+  const url = typeof input.url === 'string' ? input.url.trim() : ''
+  const publicId =
+    typeof input.publicId === 'string' ? input.publicId.trim() : ''
+
+  if (!url) return { ...EMPTY_LOGO }
+  // Never store base64 data URIs or non-HTTPS URLs in MongoDB
+  if (url.startsWith('data:') || !/^https?:\/\//i.test(url)) {
+    return { ...EMPTY_LOGO }
+  }
+  if (publicId && !publicId.startsWith('reviewbuddy/')) {
+    return { ...EMPTY_LOGO }
+  }
+
+  return {
+    url: url.slice(0, 600),
+    publicId: publicId.slice(0, 240),
+    format: sanitizeText(String(input.format || ''), 16),
+    width: Math.max(0, Number(input.width) || 0),
+    height: Math.max(0, Number(input.height) || 0),
+  }
+}
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
 
@@ -107,9 +144,18 @@ export function normalizeQuestions(questions = []) {
           : (Array.isArray(q.options) ? q.options : [])
               .map((o) => sanitizeText(String(o), 120))
               .filter(Boolean)
+      const cleanText = sanitizeText(q.text, 240)
+      const category = ALLOWED_QUESTION_CATEGORIES.includes(q.category)
+        ? q.category
+        : classifyQuestion(cleanText).category
       return {
         id: sanitizeText(String(q.id || `q-${Date.now()}`), 64),
-        text: sanitizeText(q.text, 240),
+        text: cleanText,
+        category,
+        customContext:
+          category === 'custom'
+            ? sanitizeText(String(q.customContext || ''), 160)
+            : '',
         type,
         required: type === 'short_text' ? false : Boolean(q.required),
         enabled: q.enabled !== false,
@@ -120,12 +166,22 @@ export function normalizeQuestions(questions = []) {
 
 export function toPublicBusinessPayload(biz) {
   if (!biz) return null
+  const publicLogoUrl = biz.logo?.url || ''
+  const publicLogo = publicLogoUrl
+    ? {
+        url: publicLogoUrl,
+        width: biz.logo?.width || 0,
+        height: biz.logo?.height || 0,
+      }
+    : null
+
   if (biz.status === 'paused') {
     return {
       publicId: biz.publicId,
       name: biz.name,
       logoText: biz.logoText,
-      logoUrl: biz.logoUrl || '',
+      logo: publicLogo,
+      logoUrl: publicLogoUrl,
       status: 'paused',
       appearance: normalizeAppearance(biz.appearance),
     }
@@ -135,7 +191,8 @@ export function toPublicBusinessPayload(biz) {
     publicId: biz.publicId,
     name: biz.name,
     logoText: biz.logoText,
-    logoUrl: biz.logoUrl || '',
+    logo: publicLogo,
+    logoUrl: publicLogoUrl,
     category: biz.category || '',
     location: biz.location || '',
     status: biz.status,
@@ -154,9 +211,12 @@ export function toPublicBusinessPayload(biz) {
 function serializeBusiness(doc) {
   if (!doc) return null
   const obj = typeof doc.toObject === 'function' ? doc.toObject() : doc
+  const logo = obj.logo?.url ? obj.logo : { ...EMPTY_LOGO }
   return {
     ...obj,
     id: obj.publicId,
+    logo,
+    logoUrl: logo.url || '',
     dateAdded: (obj.createdAt || new Date().toISOString()).slice(0, 10),
   }
 }
@@ -204,7 +264,7 @@ export async function createBusinessRecord(payload) {
     name,
     slug: slugify(name),
     logoText: generateLogoText(name),
-    logoUrl: sanitizeText(payload.logoUrl || '', 500),
+    logo: normalizeLogo(payload.logo),
     category: sanitizeText(payload.category || 'Other', 60),
     location: sanitizeText(payload.location || '', 160),
     address: sanitizeText(payload.address || '', 260),
@@ -217,6 +277,9 @@ export async function createBusinessRecord(payload) {
     analytics: {
       totalScans: 0,
       landingViews: 0,
+      totalInitialRatings: 0,
+      ratingSum: 0,
+      ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
       questionnaireStarts: 0,
       questionnaireCompletions: 0,
       reviewDraftsGenerated: 0,
@@ -252,8 +315,14 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
         existing.logoText = generateLogoText(cleanName)
       }
     }
-    if (updates.logoUrl !== undefined) {
-      existing.logoUrl = sanitizeText(updates.logoUrl, 500)
+    let oldPublicIdToDelete = ''
+    if (updates.logo !== undefined) {
+      const prevPublicId = existing.logo?.publicId || ''
+      const nextLogo = normalizeLogo(updates.logo)
+      existing.logo = nextLogo
+      if (prevPublicId && prevPublicId !== nextLogo.publicId) {
+        oldPublicIdToDelete = prevPublicId
+      }
     }
     if (updates.category !== undefined) {
       existing.category = sanitizeText(updates.category, 60)
@@ -292,6 +361,9 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
 
     // Notice: publicId and qrPublicUrl are immutable and NEVER overwritten
     await existing.save()
+    if (oldPublicIdToDelete) {
+      await deleteImageAsset(oldPublicIdToDelete)
+    }
     return serializeBusiness(existing)
   }
 
@@ -307,15 +379,22 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
       ? sanitizeText(updates.name, 140) || current.name
       : current.name
 
+  let oldPublicIdToDelete = ''
+  let nextLogo = current.logo || { ...EMPTY_LOGO }
+  if (updates.logo !== undefined) {
+    const prevPublicId = current.logo?.publicId || ''
+    nextLogo = normalizeLogo(updates.logo)
+    if (prevPublicId && prevPublicId !== nextLogo.publicId) {
+      oldPublicIdToDelete = prevPublicId
+    }
+  }
+
   const updated = {
     ...current,
     name: nextName,
     logoText:
       updates.name !== undefined ? generateLogoText(nextName) : current.logoText,
-    logoUrl:
-      updates.logoUrl !== undefined
-        ? sanitizeText(updates.logoUrl, 500)
-        : current.logoUrl,
+    logo: nextLogo,
     category:
       updates.category !== undefined
         ? sanitizeText(updates.category, 60)
@@ -366,12 +445,16 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
 
   items[idx] = updated
   writeLocalStore(items)
+  if (oldPublicIdToDelete) {
+    await deleteImageAsset(oldPublicIdToDelete)
+  }
   return serializeBusiness(updated)
 }
 
 const ALLOWED_EVENTS = new Set([
   'totalScans',
   'landingViews',
+  'initialRating',
   'questionnaireStarts',
   'questionnaireCompletions',
   'reviewDraftsGenerated',
@@ -379,8 +462,49 @@ const ALLOWED_EVENTS = new Set([
   'googleReviewRedirects',
 ])
 
-export async function incrementAnalyticsEvent(publicId, eventName) {
+export async function incrementAnalyticsEvent(publicId, eventName, meta = {}) {
   if (!ALLOWED_EVENTS.has(eventName)) return null
+
+  if (eventName === 'initialRating') {
+    const rating = Number(meta.rating)
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return null
+
+    if (usingMongo()) {
+      const doc = await Business.findOneAndUpdate(
+        { $or: [{ publicId }, { slug: publicId }], status: 'active' },
+        {
+          $inc: {
+            'analytics.totalInitialRatings': 1,
+            'analytics.ratingSum': rating,
+            [`analytics.ratingDistribution.${rating}`]: 1,
+          },
+        },
+        { new: true },
+      )
+      return serializeBusiness(doc)
+    }
+
+    const items = readLocalStore()
+    const idx = items.findIndex(
+      (b) =>
+        (b.publicId === publicId || b.slug === publicId) &&
+        b.status === 'active',
+    )
+    if (idx === -1) return null
+
+    const current = items[idx]
+    current.analytics = current.analytics || {}
+    current.analytics.totalInitialRatings =
+      (current.analytics.totalInitialRatings || 0) + 1
+    current.analytics.ratingSum = (current.analytics.ratingSum || 0) + rating
+    current.analytics.ratingDistribution =
+      current.analytics.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    current.analytics.ratingDistribution[rating] =
+      (current.analytics.ratingDistribution[rating] || 0) + 1
+    current.updatedAt = new Date().toISOString()
+    writeLocalStore(items)
+    return serializeBusiness(current)
+  }
 
   if (usingMongo()) {
     const doc = await Business.findOneAndUpdate(

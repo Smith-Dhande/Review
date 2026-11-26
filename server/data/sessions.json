@@ -1,0 +1,13 @@
+{
+  "3Qumt2IR4WxPWakkRPvRQNuGaqu12Mfq": {
+    "cookie": {
+      "originalMaxAge": 1800000,
+      "expires": "2026-11-26T12:35:52.078Z",
+      "secure": false,
+      "httpOnly": true,
+      "path": "/",
+      "sameSite": "lax"
+    },
+    "csrfToken": "62015a6818697e48274e171595fb945fcefbc035f2a34cbbfd0b6df7be3c4db8"
+  }
+}

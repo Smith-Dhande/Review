@@ -2,24 +2,52 @@ import { useState } from 'react'
 import { Bell, Shield, User } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Input from '../components/ui/Input'
+import PasswordInput from '../components/ui/PasswordInput'
 import Button from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, changePassword } = useAuth()
 
   const [fullName, setFullName] = useState(user?.name || '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
   const [emailNotifications, setEmailNotifications] = useState(true)
 
   const handleProfileSubmit = (e) => {
     e.preventDefault()
   }
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.')
+      return
+    }
+
+    setPasswordLoading(true)
+    try {
+      const res = await changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      })
+      setPasswordSuccess(res.message || 'Password updated successfully.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      setPasswordError(err.message || 'Could not update password.')
+    } finally {
+      setPasswordLoading(false)
+    }
   }
 
   return (
@@ -27,7 +55,10 @@ export default function SettingsPage() {
       <PageHeader
         title="Settings"
         description="Manage your account and application settings"
-        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Settings' }]}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Settings' },
+        ]}
       />
 
       <div className="flex flex-col gap-6 mt-6">
@@ -85,37 +116,54 @@ export default function SettingsPage() {
             </h2>
           </div>
 
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Input
-                label="Current Password"
-                name="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <PasswordInput
+                  label="Current Password"
+                  name="currentPassword"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  required
+                />
+              </div>
+              <PasswordInput
+                label="New Password"
+                name="newPassword"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min 10 chars, upper, lower, number, symbol"
+                required
+              />
+              <PasswordInput
+                label="Confirm Password"
+                name="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                required
               />
             </div>
-            <Input
-              label="New Password"
-              name="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-            />
-            <Input
-              label="Confirm Password"
-              name="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
+
+            {passwordError && (
+              <div
+                role="alert"
+                className="bg-error-light border border-error-border rounded-md px-3 py-2 text-xs text-error"
+              >
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <p className="text-xs font-medium text-status-active">
+                {passwordSuccess}
+              </p>
+            )}
           </div>
 
           <div className="px-6 py-4 border-t border-border flex justify-end">
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" loading={passwordLoading}>
               Update Password
             </Button>
           </div>
@@ -164,7 +212,7 @@ export default function SettingsPage() {
                   Data Export
                 </p>
                 <p className="text-xs text-text-tertiary">
-                  Export businesses, QR codes, and NFC tag records
+                  Export businesses and review configuration records
                 </p>
               </div>
               <Button type="button" variant="secondary">

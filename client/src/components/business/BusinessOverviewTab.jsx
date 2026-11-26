@@ -19,7 +19,7 @@ export default function BusinessOverviewTab({
 }) {
   const [formData, setFormData] = useState({
     name: business.name || '',
-    logoUrl: business.logoUrl || '',
+    logo: business.logo?.url ? business.logo : null,
     category: business.category || businessCategories[0],
     location: business.location || '',
     address: business.address || '',
@@ -115,8 +115,8 @@ export default function BusinessOverviewTab({
         </div>
 
         <LogoUpload
-          value={formData.logoUrl}
-          onChange={(url) => setFormData((prev) => ({ ...prev, logoUrl: url }))}
+          value={formData.logo}
+          onChange={(logo) => setFormData((prev) => ({ ...prev, logo }))}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -190,6 +190,7 @@ export default function BusinessOverviewTab({
             Business Information
           </h3>
           <BusinessLogo
+            logo={business.logo}
             logoUrl={business.logoUrl}
             logoText={business.logoText}
             name={business.name}

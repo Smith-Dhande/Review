@@ -1,14 +1,9 @@
 import { useRef, useState } from 'react'
 import { Loader2, Trash2, Upload } from 'lucide-react'
-import { businessesApi, resolveAssetUrl } from '../../services/api'
+import { businessesApi } from '../../services/api'
 
-const ALLOWED_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/svg+xml',
-])
-const MAX_BYTES = 1.5 * 1024 * 1024
+const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 
 export default function LogoUpload({ value, onChange }) {
   const inputRef = useRef(null)
@@ -16,40 +11,29 @@ export default function LogoUpload({ value, onChange }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
-  const processFile = (file) => {
+  const processFile = async (file) => {
     if (!file) return
     setError('')
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      setError('Please upload a PNG, JPG, WebP, or SVG image.')
+      setError('Please upload a PNG, JPG, JPEG, or WebP image.')
       return
     }
 
     if (file.size > MAX_BYTES) {
-      setError('Image size must be 1.5 MB or less.')
+      setError('Image size must be 5 MB or less.')
       return
     }
 
     setUploading(true)
-    const reader = new FileReader()
-    reader.onload = async () => {
-      try {
-        const res = await businessesApi.uploadLogo({
-          mimeType: file.type,
-          dataBase64: reader.result,
-        })
-        onChange(res.logoUrl)
-      } catch (err) {
-        setError(err.message || 'Failed to upload logo.')
-      } finally {
-        setUploading(false)
-      }
-    }
-    reader.onerror = () => {
-      setError('Could not read the selected file.')
+    try {
+      const res = await businessesApi.uploadLogo(file)
+      onChange(res.logo)
+    } catch (err) {
+      setError(err.message || 'Failed to upload logo.')
+    } finally {
       setUploading(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleFileChange = (e) => {
@@ -65,7 +49,7 @@ export default function LogoUpload({ value, onChange }) {
     processFile(file)
   }
 
-  const previewUrl = resolveAssetUrl(value)
+  const previewUrl = typeof value === 'string' ? value : value?.url || ''
 
   return (
     <div className="space-y-2">
@@ -76,24 +60,27 @@ export default function LogoUpload({ value, onChange }) {
       <input
         ref={inputRef}
         type="file"
-        accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
         onChange={handleFileChange}
         className="hidden"
       />
 
       {previewUrl ? (
         <div className="flex items-center gap-4 p-3 rounded-md border border-border bg-white">
-          <div className="w-14 h-14 rounded-md border border-border bg-surface flex items-center justify-center p-1.5 overflow-hidden shrink-0">
+          <div className="h-14 min-w-[56px] max-w-[140px] rounded-md border border-border bg-surface flex items-center justify-center px-2 py-1 overflow-hidden shrink-0">
             <img
               src={previewUrl}
               alt="Business logo preview"
-              className="w-full h-full object-contain"
+              className="max-h-full w-auto max-w-full object-contain"
             />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-text-primary">Logo uploaded</p>
             <p className="text-xs text-text-tertiary truncate">
-              PNG, JPG, WebP, or SVG
+              {value?.format ? value.format.toUpperCase() : 'PNG, JPG, WebP'}
+              {value?.width && value?.height
+                ? ` · ${value.width}×${value.height}`
+                : ''}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -107,7 +94,7 @@ export default function LogoUpload({ value, onChange }) {
             </button>
             <button
               type="button"
-              onClick={() => onChange('')}
+              onClick={() => onChange(null)}
               aria-label="Remove logo"
               className="p-1.5 rounded-md border border-border bg-white text-text-tertiary hover:text-error cursor-pointer transition-colors"
             >
@@ -151,7 +138,8 @@ export default function LogoUpload({ value, onChange }) {
                 {uploading ? 'Uploading logo...' : 'Upload Logo'}
               </p>
               <p className="text-xs text-text-tertiary">
-                Drag and drop or click to browse · PNG, JPG, WebP, SVG (max 1.5 MB)
+                Drag and drop or click to browse · PNG, JPG, JPEG, WebP (max 5
+                MB)
               </p>
             </div>
           </div>

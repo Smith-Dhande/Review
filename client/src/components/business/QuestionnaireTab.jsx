@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import EmptyState from '../ui/EmptyState'
+import { businessesApi } from '../../services/api'
 
 const QUESTION_TYPES = [
   { value: 'single_choice', label: 'Single Choice' },
@@ -16,8 +17,33 @@ const TYPE_LABELS = {
   short_text: 'Optional Short Text',
 }
 
+const SEMANTIC_CATEGORIES = [
+  { id: 'staff_behaviour', label: 'Staff Behaviour' },
+  { id: 'food_quality', label: 'Food Quality' },
+  { id: 'product_quality', label: 'Product Quality' },
+  { id: 'service_speed', label: 'Service Speed' },
+  { id: 'service_quality', label: 'Service Quality' },
+  { id: 'cleanliness', label: 'Cleanliness' },
+  { id: 'ambience', label: 'Ambience' },
+  { id: 'pricing', label: 'Pricing & Value' },
+  { id: 'delivery_experience', label: 'Delivery Experience' },
+  { id: 'communication', label: 'Communication' },
+  { id: 'professionalism', label: 'Professionalism' },
+  { id: 'technical_expertise', label: 'Technical Expertise' },
+  { id: 'appointment_experience', label: 'Appointment Experience' },
+  { id: 'comfort', label: 'Comfort' },
+  { id: 'overall_experience', label: 'Overall Experience' },
+  { id: 'custom', label: 'Custom' },
+]
+
+const CATEGORY_LABELS = Object.fromEntries(
+  SEMANTIC_CATEGORIES.map((c) => [c.id, c.label]),
+)
+
 const emptyQuestion = {
   text: '',
+  category: 'custom',
+  customContext: '',
   type: 'single_choice',
   required: true,
   options: [''],
@@ -27,18 +53,46 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(emptyQuestion)
+  const [manualCategory, setManualCategory] = useState(false)
+  const [suggestedLabel, setSuggestedLabel] = useState('')
+
+  useEffect(() => {
+    if ((!isAdding && !editingId) || manualCategory) return undefined
+    const text = draft.text.trim()
+    if (text.length < 4) return undefined
+
+    const timer = setTimeout(() => {
+      businessesApi
+        .classifyQuestion(text)
+        .then((res) => {
+          if (res?.category) {
+            setDraft((prev) => ({ ...prev, category: res.category }))
+            setSuggestedLabel(res.label || '')
+          }
+        })
+        .catch(() => {})
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [draft.text, isAdding, editingId, manualCategory])
 
   const startAdd = () => {
     setEditingId(null)
-    setDraft({ text: '', type: 'single_choice', required: true, options: [''] })
+    setManualCategory(false)
+    setSuggestedLabel('')
+    setDraft(emptyQuestion)
     setIsAdding(true)
   }
 
   const startEdit = (q) => {
     setIsAdding(false)
     setEditingId(q.id)
+    setManualCategory(Boolean(q.category))
+    setSuggestedLabel('')
     setDraft({
       text: q.text,
+      category: q.category || 'custom',
+      customContext: q.customContext || '',
       type: q.type,
       required: q.required,
       options: q.options?.length ? [...q.options] : [''],
@@ -48,6 +102,8 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
   const cancelForm = () => {
     setIsAdding(false)
     setEditingId(null)
+    setManualCategory(false)
+    setSuggestedLabel('')
     setDraft(emptyQuestion)
   }
 
@@ -60,29 +116,22 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
         ? []
         : draft.options.map((o) => o.trim()).filter(Boolean)
 
+    const payload = {
+      text: draft.text.trim(),
+      category: draft.category || 'custom',
+      customContext:
+        draft.category === 'custom' ? draft.customContext.trim() : '',
+      type: draft.type,
+      required: draft.type === 'short_text' ? false : draft.required,
+      options: cleanedOptions,
+    }
+
     if (editingId) {
       onChange((prev) =>
-        prev.map((q) =>
-          q.id === editingId
-            ? {
-                ...q,
-                text: draft.text.trim(),
-                type: draft.type,
-                required: draft.type === 'short_text' ? false : draft.required,
-                options: cleanedOptions,
-              }
-            : q,
-        ),
+        prev.map((q) => (q.id === editingId ? { ...q, ...payload } : q)),
       )
     } else {
-      const newQuestion = {
-        id: `q-${Date.now()}`,
-        text: draft.text.trim(),
-        type: draft.type,
-        required: draft.type === 'short_text' ? false : draft.required,
-        options: cleanedOptions,
-      }
-      onChange((prev) => [...prev, newQuestion])
+      onChange((prev) => [...prev, { id: `q-${Date.now()}`, ...payload }])
     }
     cancelForm()
   }
@@ -129,8 +178,8 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
             Questionnaire
           </h3>
           <p className="text-xs text-text-tertiary mt-0.5">
-            Configure the questions customers answer before generating their
-            review draft.
+            Configure questions and their semantic topics so generated reviews
+            accurately reflect customer answers.
           </p>
         </div>
         {!isAdding && !editingId && (
@@ -162,7 +211,7 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
 
           <Input
             label="Question Text"
-            placeholder="e.g. What did you enjoy most during your visit?"
+            placeholder="e.g. How was the staff behaviour?"
             value={draft.text}
             onChange={(e) =>
               setDraft((prev) => ({ ...prev, text: e.target.value }))
@@ -171,6 +220,33 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-text-primary">
+                  Semantic Topic
+                </label>
+                {suggestedLabel && !manualCategory && (
+                  <span className="text-[11px] text-primary font-medium">
+                    Auto-suggested
+                  </span>
+                )}
+              </div>
+              <select
+                value={draft.category}
+                onChange={(e) => {
+                  setManualCategory(true)
+                  setDraft((prev) => ({ ...prev, category: e.target.value }))
+                }}
+                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text-primary focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                {SEMANTIC_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">
                 Question Type
@@ -189,26 +265,37 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
                 ))}
               </select>
             </div>
-
-            {draft.type !== 'short_text' && (
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.required}
-                    onChange={(e) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        required: e.target.checked,
-                      }))
-                    }
-                    className="w-4 h-4 rounded accent-primary cursor-pointer"
-                  />
-                  <span>Required question</span>
-                </label>
-              </div>
-            )}
           </div>
+
+          {draft.category === 'custom' && (
+            <Input
+              label="Topic Description (Optional)"
+              placeholder="e.g. parking availability, live music, kids play area"
+              value={draft.customContext}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, customContext: e.target.value }))
+              }
+            />
+          )}
+
+          {draft.type !== 'short_text' && (
+            <div>
+              <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.required}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      required: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded accent-primary cursor-pointer"
+                />
+                <span>Required question</span>
+              </label>
+            </div>
+          )}
 
           {draft.type !== 'short_text' && (
             <div className="space-y-2">
@@ -282,12 +369,15 @@ export default function QuestionnaireTab({ questions = [], onChange }) {
               className="p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
             >
               <div className="space-y-2 min-w-0">
-                <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-medium text-text-tertiary tabular-nums">
                     Q{index + 1}
                   </span>
                   <span className="text-xs font-medium text-text-secondary bg-surface px-2 py-0.5 rounded-sm border border-border">
                     {TYPE_LABELS[q.type] || q.type}
+                  </span>
+                  <span className="text-xs font-medium text-primary bg-primary-light px-2 py-0.5 rounded-sm">
+                    {CATEGORY_LABELS[q.category] || 'Custom'}
                   </span>
                   {q.required && (
                     <span className="text-xs text-text-tertiary">Required</span>

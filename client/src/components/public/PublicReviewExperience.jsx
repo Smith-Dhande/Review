@@ -7,12 +7,21 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  Star,
 } from 'lucide-react'
 import BusinessLogo from '../ui/BusinessLogo'
 import { getFontStack, loadGoogleFont } from '../../utils/fontLoader'
 import { getCategoryTheme } from '../../utils/categoryThemes'
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+const RATING_LABELS = {
+  1: 'Poor',
+  2: 'Fair',
+  3: 'Average',
+  4: 'Good',
+  5: 'Excellent',
+}
 
 /**
  * Editorial customer-facing review experience.
@@ -22,17 +31,20 @@ export default function PublicReviewExperience({
   business,
   appearanceOverride,
   isPreview = false,
+  onRatingContinue,
   onFirstInteraction,
   onGenerateDraft,
   onRegenerateDraft,
   onCopySuccess,
   onGoogleRedirect,
 }) {
+  const [rating, setRating] = useState(0)
+  const [hoveredRating, setHoveredRating] = useState(0)
   const [answers, setAnswers] = useState({})
   const [validationError, setValidationError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
-  const [step, setStep] = useState('questionnaire') // 'questionnaire' | 'draft'
+  const [step, setStep] = useState(isPreview ? 'questionnaire' : 'rating') // 'rating' | 'questionnaire' | 'draft'
   const [draft, setDraft] = useState('')
   const [copied, setCopied] = useState(false)
   const [manualCopyHint, setManualCopyHint] = useState(false)
@@ -45,7 +57,7 @@ export default function PublicReviewExperience({
   const isCentered = appearance.businessNameAlignment === 'center'
   const isAbove = appearance.logoPlacement === 'above'
   const isCompact = appearance.layoutStyle === 'compact'
-  const hasUploadedLogo = Boolean(business?.logoUrl)
+  const hasUploadedLogo = Boolean(business?.logo?.url || business?.logoUrl)
   const categoryTheme = getCategoryTheme(business?.category)
 
   useEffect(() => {
@@ -124,7 +136,7 @@ export default function PublicReviewExperience({
     setSubmitting(true)
     setValidationError('')
     try {
-      const generated = await onGenerateDraft(answers)
+      const generated = await onGenerateDraft({ rating, answers })
       setDraft(generated)
       setStep('draft')
       if (typeof window !== 'undefined') {
@@ -141,13 +153,19 @@ export default function PublicReviewExperience({
     if (isPreview || !onRegenerateDraft) return
     setRegenerating(true)
     try {
-      const generated = await onRegenerateDraft(answers)
+      const generated = await onRegenerateDraft({ rating, answers })
       setDraft(generated)
     } catch {
       // Keep existing draft
     } finally {
       setRegenerating(false)
     }
+  }
+
+  const handleContinueFromRating = () => {
+    if (!rating) return
+    onRatingContinue?.(rating)
+    setStep('questionnaire')
   }
 
   const handleCopy = async () => {
@@ -187,10 +205,12 @@ export default function PublicReviewExperience({
     >
       {hasUploadedLogo ? (
         <BusinessLogo
+          logo={business?.logo}
           logoUrl={business?.logoUrl}
           logoText={business?.logoText}
           name={business?.name}
           size={isCompact ? 'md' : 'lg'}
+          lazy={false}
           className="border-[#E2DFD7] shadow-xs"
         />
       ) : (
@@ -259,11 +279,118 @@ export default function PublicReviewExperience({
     )
   }
 
+  const activeStarDisplay = hoveredRating || rating
+
   const renderInteractiveStage = () => (
     <>
+      {/* Stage 0: Initial 5-Star Rating Screen */}
+      {step === 'rating' && (
+        <div className="space-y-8 py-2">
+          <div className="space-y-2">
+            <p
+              className="text-[11px] font-medium uppercase tracking-[0.16em]"
+              style={{ color: accentColor }}
+            >
+              Step 01 · Overall Experience
+            </p>
+            <h2 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-[#171716] leading-snug">
+              How was your experience with {business?.name}?
+            </h2>
+            <p className="text-sm text-[#666560]">
+              Select a rating below to begin your quick feedback.
+            </p>
+          </div>
+
+          <div
+            className="bg-white border rounded-md p-6 sm:p-8 flex flex-col items-center gap-4"
+            style={{ borderColor: categoryTheme.borderColor }}
+          >
+            <div
+              role="radiogroup"
+              aria-label={`Rate your experience with ${business?.name}`}
+              className="flex items-center justify-center gap-2 sm:gap-3"
+            >
+              {[1, 2, 3, 4, 5].map((starValue) => {
+                const filled = starValue <= activeStarDisplay
+                return (
+                  <button
+                    key={starValue}
+                    type="button"
+                    role="radio"
+                    aria-checked={rating === starValue}
+                    aria-label={`${starValue} ${starValue === 1 ? 'star' : 'stars'}`}
+                    onMouseEnter={() => setHoveredRating(starValue)}
+                    onMouseLeave={() => setHoveredRating(0)}
+                    onClick={() => setRating(starValue)}
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-md flex items-center justify-center transition-transform duration-150 hover:scale-105 cursor-pointer"
+                  >
+                    <Star
+                      className="w-8 h-8 sm:w-9 sm:h-9 transition-colors duration-150"
+                      style={{
+                        color: filled ? accentColor : '#D5D2CA',
+                        fill: filled ? accentColor : 'transparent',
+                      }}
+                    />
+                  </button>
+                )
+              })}
+            </div>
+
+            <p className="text-sm font-medium text-[#171716] min-h-[20px]">
+              {activeStarDisplay
+                ? `${activeStarDisplay} / 5 — ${RATING_LABELS[activeStarDisplay]}`
+                : 'Tap a star to rate'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={!rating}
+            onClick={handleContinueFromRating}
+            className="w-full min-h-[48px] px-6 rounded-md text-sm font-medium text-white inline-flex items-center justify-center gap-2.5 transition-opacity hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            style={{ backgroundColor: accentColor }}
+          >
+            <span>Continue</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Stage 1: Questionnaire */}
       {step === 'questionnaire' && (
         <form onSubmit={handleSubmit} className="space-y-7">
+          {!isPreview && rating > 0 && (
+            <div
+              className="flex items-center justify-between pb-4 border-b text-xs"
+              style={{ borderColor: categoryTheme.borderColor }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[#6E6C66]">Your rating:</span>
+                <span className="inline-flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      className="w-3.5 h-3.5"
+                      style={{
+                        color: s <= rating ? accentColor : '#D5D2CA',
+                        fill: s <= rating ? accentColor : 'transparent',
+                      }}
+                    />
+                  ))}
+                </span>
+                <span className="font-medium text-[#171716]">
+                  ({rating}/5)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep('rating')}
+                className="text-[#666560] hover:text-[#171716] underline cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
+          )}
           {useSplitDesktop ? (
             <div className="lg:hidden">{renderProgressBlock()}</div>
           ) : (
@@ -516,6 +643,27 @@ export default function PublicReviewExperience({
           </div>
 
           {/* Editorial pull-quote draft frame */}
+          {rating > 0 && (
+            <div className="flex items-center gap-2 text-xs text-[#666560]">
+              <span>Initial rating:</span>
+              <span className="inline-flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className="w-3.5 h-3.5"
+                    style={{
+                      color: s <= rating ? accentColor : '#D5D2CA',
+                      fill: s <= rating ? accentColor : 'transparent',
+                    }}
+                  />
+                ))}
+              </span>
+              <span className="font-medium text-[#171716]">
+                {rating} / 5 ({RATING_LABELS[rating]})
+              </span>
+            </div>
+          )}
+
           <div
             className="bg-white border rounded-md p-5 sm:p-6 border-l-[3px]"
             style={{

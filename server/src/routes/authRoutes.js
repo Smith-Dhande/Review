@@ -1,41 +1,31 @@
 import { Router } from 'express'
 import {
-  issueAdminToken,
-  requireAdmin,
-  revokeAdminToken,
-} from '../middleware/auth.js'
+  changePassword,
+  getCsrf,
+  getMe,
+  login,
+  logout,
+} from '../controllers/authController.js'
+import { requireAuth } from '../middleware/requireAuth.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
+import { requireCsrf } from '../middleware/csrfProtection.js'
+import { createLoginRateLimiter } from '../middleware/rateLimiter.js'
 
-const router = Router()
+export function createAuthRouter() {
+  const router = Router()
+  const loginRateLimiter = createLoginRateLimiter()
 
-router.post('/login', (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase()
-  const password = String(req.body?.password || '')
+  router.get('/csrf', getCsrf)
+  router.post('/login', loginRateLimiter, requireCsrf, login)
+  router.post('/logout', requireAuth, requireAdmin, requireCsrf, logout)
+  router.get('/me', requireAuth, requireAdmin, getMe)
+  router.post(
+    '/change-password',
+    requireAuth,
+    requireAdmin,
+    requireCsrf,
+    changePassword,
+  )
 
-  const expectedEmail = (
-    process.env.ADMIN_EMAIL || 'admin@reviewbuddy.com'
-  ).toLowerCase()
-  const expectedPassword = process.env.ADMIN_PASSWORD || 'password'
-
-  if (email !== expectedEmail || password !== expectedPassword) {
-    return res.status(401).json({ message: 'Invalid email or password' })
-  }
-
-  const token = issueAdminToken(email)
-  return res.json({
-    token,
-    user: {
-      id: '1',
-      name: 'Admin',
-      email,
-      role: 'Administrator',
-    },
-  })
-})
-
-router.post('/logout', requireAdmin, (req, res) => {
-  const token = (req.headers.authorization || '').slice(7).trim()
-  revokeAdminToken(token)
-  return res.json({ ok: true })
-})
-
-export default router
+  return router
+}

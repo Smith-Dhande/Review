@@ -6,24 +6,8 @@ import {
   toPublicBusinessPayload,
 } from '../repositories/businessRepo.js'
 import { generateReviewDraft } from '../services/reviewGenerator.js'
-import { getLogoAsset } from '../services/logoService.js'
 
 const router = Router()
-
-// Public logo serving (before rate-limiter or lightweight)
-router.get('/logos/:logoId', async (req, res, next) => {
-  try {
-    const asset = await getLogoAsset(req.params.logoId)
-    if (!asset) {
-      return res.status(404).json({ message: 'Logo not found' })
-    }
-    res.setHeader('Content-Type', asset.mimeType)
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-    return res.send(asset.buffer)
-  } catch (err) {
-    return next(err)
-  }
-})
 
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -97,7 +81,22 @@ router.post('/businesses/:publicId/questionnaire/complete', async (req, res, nex
       }
     }
 
-    const draft = generateReviewDraft(business, answers)
+    const rawRating = req.body?.rating
+    let rating = null
+    if (rawRating !== undefined && rawRating !== null) {
+      const parsed = Number(rawRating)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+        return res
+          .status(400)
+          .json({ message: 'Rating must be an integer between 1 and 5' })
+      }
+      rating = parsed
+    }
+
+    const draft = generateReviewDraft(business, answers, {
+      rating,
+      variationSalt: req.body?.isRegenerate ? Date.now() : 0,
+    })
 
     if (!req.body?.isRegenerate) {
       await incrementAnalyticsEvent(business.publicId, 'questionnaireCompletions')
@@ -118,7 +117,9 @@ router.post('/businesses/:publicId/events', async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid business identifier' })
     }
 
-    const updated = await incrementAnalyticsEvent(publicId, event)
+    const updated = await incrementAnalyticsEvent(publicId, event, {
+      rating: req.body?.rating,
+    })
     if (!updated) {
       return res.status(404).json({ message: 'Business or event not available' })
     }
