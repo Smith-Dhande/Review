@@ -1,0 +1,192 @@
+export function buildQrPublicUrl(publicId) {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(
+    /\/+$/,
+    '',
+  )
+  return `${base}/review/${publicId}`
+}
+
+export function seedBusinesses() {
+  const now = new Date().toISOString()
+
+  return [
+    {
+      publicId: 'chai-junction',
+      qrPublicUrl: buildQrPublicUrl('chai-junction'),
+      name: 'Chai Junction',
+      slug: 'chai-junction',
+      logoText: 'CJ',
+      logoUrl: '',
+      category: 'Café',
+      location: 'Bandra West, Mumbai',
+      address: 'Shop 4, Carter Road, Bandra West, Mumbai 400050',
+      phone: '+91 98201 44510',
+      email: 'hello@chaijunction.in',
+      status: 'active',
+      reviewConfig: {
+        googleReviewUrl: 'https://g.page/r/chai-junction-mumbai/review',
+        welcomeMessage:
+          'Thanks for visiting Chai Junction! Answer a few quick questions to draft your review.',
+        tone: 'Friendly and Casual',
+        length: 'Medium',
+        autoCopyPrompt: true,
+      },
+      appearance: {
+        accentColor: '#1B6B4A',
+        fontFamily: 'Inter',
+        businessNameAlignment: 'left',
+        logoPlacement: 'beside',
+        layoutStyle: 'centered',
+      },
+      questions: [
+        {
+          id: 'q-101',
+          text: 'What did you enjoy most during your visit?',
+          type: 'multiple_choice',
+          required: true,
+          enabled: true,
+          options: ['Masala Chai', 'Snacks & Bites', 'Cozy Ambience', 'Quick Service'],
+        },
+        {
+          id: 'q-102',
+          text: 'How was the staff hospitality?',
+          type: 'single_choice',
+          required: true,
+          enabled: true,
+          options: ['Warm and attentive', 'Polite and quick', 'Good overall', 'Could be better'],
+        },
+        {
+          id: 'q-103',
+          text: 'Anything specific you would recommend to others?',
+          type: 'short_text',
+          required: false,
+          enabled: true,
+          options: [],
+        },
+      ],
+      analytics: {
+        totalScans: 612,
+        landingViews: 574,
+        questionnaireStarts: 495,
+        questionnaireCompletions: 468,
+        reviewDraftsGenerated: 439,
+        copyClicks: 362,
+        googleReviewRedirects: 318,
+      },
+      createdAt: '2026-03-15T09:00:00.000Z',
+      updatedAt: now,
+    },
+    {
+      publicId: 'spice-garden',
+      qrPublicUrl: buildQrPublicUrl('spice-garden'),
+      name: 'Spice Garden Restaurant',
+      slug: 'spice-garden',
+      logoText: 'SG',
+      logoUrl: '',
+      category: 'Restaurant',
+      location: 'Connaught Place, Delhi',
+      address: 'M-24, Connaught Place, New Delhi 110001',
+      phone: '+91 98112 78234',
+      email: 'contact@spicegarden.in',
+      status: 'active',
+      reviewConfig: {
+        googleReviewUrl: 'https://g.page/r/spice-garden-delhi/review',
+        welcomeMessage:
+          'We hope you loved your meal at Spice Garden. Tell us what stood out!',
+        tone: 'Natural and Conversational',
+        length: 'Medium',
+        autoCopyPrompt: true,
+      },
+      appearance: {
+        accentColor: '#B45309',
+        fontFamily: 'DM Sans',
+        businessNameAlignment: 'center',
+        logoPlacement: 'above',
+        layoutStyle: 'centered',
+      },
+      questions: [
+        {
+          id: 'q-201',
+          text: 'Which dishes stood out to you?',
+          type: 'multiple_choice',
+          required: true,
+          enabled: true,
+          options: ['Starters', 'Main Course', 'Breads & Rice', 'Desserts'],
+        },
+        {
+          id: 'q-202',
+          text: 'How would you describe the dining atmosphere?',
+          type: 'single_choice',
+          required: true,
+          enabled: true,
+          options: ['Great for family', 'Relaxed and quiet', 'Lively and vibrant'],
+        },
+      ],
+      analytics: {
+        totalScans: 843,
+        landingViews: 790,
+        questionnaireStarts: 690,
+        questionnaireCompletions: 642,
+        reviewDraftsGenerated: 601,
+        copyClicks: 495,
+        googleReviewRedirects: 432,
+      },
+      createdAt: '2026-02-20T09:00:00.000Z',
+      updatedAt: now,
+    },
+    {
+      publicId: 'the-book-corner',
+      qrPublicUrl: buildQrPublicUrl('the-book-corner'),
+      name: 'The Book Corner',
+      slug: 'the-book-corner',
+      logoText: 'BC',
+      logoUrl: '',
+      category: 'Bookstore',
+      location: 'MI Road, Jaipur',
+      address: 'MI Road, Panch Batti, Jaipur 302001',
+      phone: '+91 98290 55412',
+      email: 'hello@bookcorner.in',
+      status: 'paused',
+      reviewConfig: {
+        googleReviewUrl: 'https://g.page/r/the-book-corner-jaipur/review',
+        welcomeMessage:
+          'Found your next great read? Leave a quick note for fellow readers.',
+        tone: 'Simple and Straightforward',
+        length: 'Short',
+        autoCopyPrompt: true,
+      },
+      appearance: {
+        accentColor: '#1E293B',
+        fontFamily: 'Lato',
+        businessNameAlignment: 'left',
+        logoPlacement: 'beside',
+        layoutStyle: 'compact',
+      },
+      questions: [
+        {
+          id: 'q-501',
+          text: 'How was our book selection and staff recommendation?',
+          type: 'single_choice',
+          required: true,
+          enabled: true,
+          options: [
+            'Wide collection and helpful staff',
+            'Cozy reading nook',
+            'Easy to find titles',
+          ],
+        },
+      ],
+      analytics: {
+        totalScans: 95,
+        landingViews: 84,
+        questionnaireStarts: 74,
+        questionnaireCompletions: 68,
+        reviewDraftsGenerated: 62,
+        copyClicks: 49,
+        googleReviewRedirects: 41,
+      },
+      createdAt: '2026-05-22T09:00:00.000Z',
+      updatedAt: now,
+    },
+  ]
+}

@@ -7,7 +7,7 @@ export default function ReviewConfigTab({ business, onSave }) {
   const [config, setConfig] = useState({
     googleReviewUrl: business.reviewConfig?.googleReviewUrl || '',
     welcomeMessage: business.reviewConfig?.welcomeMessage || '',
-    tone: business.reviewConfig?.tone || 'Friendly',
+    tone: business.reviewConfig?.tone || 'Natural and Conversational',
     length: business.reviewConfig?.length || 'Medium',
     autoCopyPrompt: business.reviewConfig?.autoCopyPrompt ?? true,
   })

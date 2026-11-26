@@ -544,5 +544,33 @@ export const businessCategories = [
   'Other',
 ]
 
-export const reviewTones = ['Friendly', 'Professional', 'Warm', 'Casual', 'Calm']
+export const reviewTones = [
+  'Natural and Conversational',
+  'Friendly and Casual',
+  'Professional',
+  'Enthusiastic',
+  'Simple and Straightforward',
+]
 export const reviewLengths = ['Short', 'Medium', 'Detailed']
+
+export const appearanceFonts = [
+  'Inter',
+  'DM Sans',
+  'Poppins',
+  'Lato',
+  'Manrope',
+  'Plus Jakarta Sans',
+  'Playfair Display',
+  'Lora',
+  'Outfit',
+  'Source Sans 3',
+]
+
+export const appearanceAccentPresets = [
+  { name: 'Forest Green', value: '#1B6B4A' },
+  { name: 'Slate Navy', value: '#1E293B' },
+  { name: 'Deep Teal', value: '#0F766E' },
+  { name: 'Warm Amber', value: '#B45309' },
+  { name: 'Charcoal', value: '#1A1A1A' },
+  { name: 'Burgundy', value: '#991B1B' },
+]

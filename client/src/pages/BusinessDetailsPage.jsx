@@ -4,9 +4,11 @@ import { ArrowLeft } from 'lucide-react'
 import Button from '../components/ui/Button'
 import StatusText from '../components/ui/StatusText'
 import EmptyState from '../components/ui/EmptyState'
+import BusinessLogo from '../components/ui/BusinessLogo'
 import BusinessOverviewTab from '../components/business/BusinessOverviewTab'
 import ReviewConfigTab from '../components/business/ReviewConfigTab'
 import QuestionnaireTab from '../components/business/QuestionnaireTab'
+import LandingPageAppearanceTab from '../components/business/LandingPageAppearanceTab'
 import BusinessAnalyticsTab from '../components/business/BusinessAnalyticsTab'
 import { useBusinesses } from '../context/BusinessesContext'
 
@@ -14,6 +16,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'questionnaire', label: 'Questionnaire' },
   { id: 'config', label: 'Review Configuration' },
+  { id: 'appearance', label: 'Landing Page Appearance' },
   { id: 'analytics', label: 'Analytics' },
 ]
 
@@ -24,13 +27,16 @@ export default function BusinessDetailsPage() {
     updateBusiness,
     toggleBusinessStatus,
     updateReviewConfig,
+    updateAppearance,
     setQuestions,
   } = useBusinesses()
 
   const [activeTab, setActiveTab] = useState('overview')
   const [isEditing, setIsEditing] = useState(false)
 
-  const business = businesses.find((b) => b.id === businessId)
+  const business = businesses.find(
+    (b) => b.id === businessId || b.publicId === businessId,
+  )
 
   if (!business) {
     return (
@@ -51,8 +57,8 @@ export default function BusinessDetailsPage() {
     )
   }
 
-  const handleSaveEdit = (updates) => {
-    updateBusiness(business.id, updates)
+  const handleSaveEdit = async (updates) => {
+    await updateBusiness(business.publicId || business.id, updates)
     setIsEditing(false)
   }
 
@@ -76,9 +82,12 @@ export default function BusinessDetailsPage() {
       {/* Business workspace header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-lg bg-card border border-border flex items-center justify-center text-sm font-semibold text-text-primary shrink-0">
-            {business.logoText}
-          </div>
+          <BusinessLogo
+            logoUrl={business.logoUrl}
+            logoText={business.logoText}
+            name={business.name}
+            size="md"
+          />
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-[26px] font-semibold tracking-tight text-text-primary leading-tight">
@@ -108,9 +117,13 @@ export default function BusinessDetailsPage() {
           <Button
             variant={business.status === 'active' ? 'secondary' : 'primary'}
             size="sm"
-            onClick={() => toggleBusinessStatus(business.id)}
+            onClick={() =>
+              toggleBusinessStatus(business.publicId || business.id)
+            }
           >
-            {business.status === 'active' ? 'Pause Business' : 'Activate Business'}
+            {business.status === 'active'
+              ? 'Pause Business'
+              : 'Activate Business'}
           </Button>
         </div>
       </div>
@@ -166,14 +179,27 @@ export default function BusinessDetailsPage() {
         {activeTab === 'questionnaire' && (
           <QuestionnaireTab
             questions={business.questions}
-            onChange={(updater) => setQuestions(business.id, updater)}
+            onChange={(updater) =>
+              setQuestions(business.publicId || business.id, updater)
+            }
           />
         )}
 
         {activeTab === 'config' && (
           <ReviewConfigTab
             business={business}
-            onSave={(cfg) => updateReviewConfig(business.id, cfg)}
+            onSave={(cfg) =>
+              updateReviewConfig(business.publicId || business.id, cfg)
+            }
+          />
+        )}
+
+        {activeTab === 'appearance' && (
+          <LandingPageAppearanceTab
+            business={business}
+            onSave={(appCfg) =>
+              updateAppearance(business.publicId || business.id, appCfg)
+            }
           />
         )}
 

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import QRCode from 'qrcode'
 import { Check, Copy, Download, ExternalLink } from 'lucide-react'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 import StatusText from '../ui/StatusText'
+import LogoUpload from '../ui/LogoUpload'
 import QrPreviewSvg from './QrPreviewSvg'
 import { getPublicReviewUrl } from '../../context/BusinessesContext'
 import { businessCategories } from '../../data/mockData'
@@ -16,6 +18,7 @@ export default function BusinessOverviewTab({
 }) {
   const [formData, setFormData] = useState({
     name: business.name || '',
+    logoUrl: business.logoUrl || '',
     category: business.category || businessCategories[0],
     location: business.location || '',
     address: business.address || '',
@@ -24,7 +27,8 @@ export default function BusinessOverviewTab({
   })
   const [copied, setCopied] = useState(false)
 
-  const publicUrl = getPublicReviewUrl(business.id)
+  const publicUrl = getPublicReviewUrl(business)
+  const fileSlug = business.slug || business.publicId || business.id
 
   const handleChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }))
@@ -46,20 +50,51 @@ export default function BusinessOverviewTab({
     }
   }
 
-  const handleDownloadQr = () => {
-    const svgEl = document.getElementById(`business-qr-${business.id}`)
-    if (!svgEl) return
-    const serializer = new XMLSerializer()
-    const source = serializer.serializeToString(svgEl)
-    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${business.slug || business.id}-review-qr.svg`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+  const handleDownloadPng = async () => {
+    try {
+      const dataUrl = await QRCode.toDataURL(publicUrl, {
+        width: 1024,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#1A1A1A',
+          light: '#FFFFFF',
+        },
+      })
+      const link = document.createElement('a')
+      link.href = dataUrl
+      link.download = `${fileSlug}-review-qr.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch {
+      // Ignore download failure
+    }
+  }
+
+  const handleDownloadSvg = async () => {
+    try {
+      const svg = await QRCode.toString(publicUrl, {
+        type: 'svg',
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#1A1A1A',
+          light: '#FFFFFF',
+        },
+      })
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${fileSlug}-review-qr.svg`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch {
+      // Ignore download failure
+    }
   }
 
   if (isEditing) {
@@ -74,8 +109,14 @@ export default function BusinessOverviewTab({
           </h3>
           <p className="text-xs text-text-tertiary mt-0.5">
             Update profile, location, and contact details for {business.name}.
+            The public QR URL remains unchanged.
           </p>
         </div>
+
+        <LogoUpload
+          value={formData.logoUrl}
+          onChange={(url) => setFormData((prev) => ({ ...prev, logoUrl: url }))}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
@@ -212,23 +253,21 @@ export default function BusinessOverviewTab({
 
       {/* Single Generated Business QR Code */}
       <div className="bg-card rounded-lg border border-border self-start">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary">
-              Business QR Code
-            </h3>
-            <p className="text-xs text-text-tertiary mt-0.5">
-              Unique public review link &amp; QR code
-            </p>
-          </div>
+        <div className="px-6 py-4 border-b border-border">
+          <h3 className="text-sm font-semibold text-text-primary">
+            Business QR Code
+          </h3>
+          <p className="text-xs text-text-tertiary mt-0.5">
+            {business.name} · Permanent review link
+          </p>
         </div>
 
         <div className="p-6 space-y-5">
-          <div className="flex justify-center py-2 bg-surface/60 rounded-lg border border-border">
+          <div className="flex justify-center py-3 bg-surface/60 rounded-lg border border-border">
             <QrPreviewSvg
-              id={`business-qr-${business.id}`}
+              id={`business-qr-${business.publicId || business.id}`}
               value={publicUrl}
-              size={148}
+              size={156}
             />
           </div>
 
@@ -255,45 +294,55 @@ export default function BusinessOverviewTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleCopyUrl}
-              className="w-full"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-status-active" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy URL
-                </>
-              )}
-            </Button>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyUrl}
+                className="w-full"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-status-active" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy URL
+                  </>
+                )}
+              </Button>
 
-            <Button
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleDownloadPng}
+                className="w-full"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download PNG
+              </Button>
+            </div>
+
+            <button
               type="button"
-              variant="primary"
-              size="sm"
-              onClick={handleDownloadQr}
-              className="w-full"
+              onClick={handleDownloadSvg}
+              className="w-full text-center text-xs text-text-secondary hover:text-text-primary py-1 cursor-pointer transition-colors"
             >
-              <Download className="w-3.5 h-3.5" />
-              Download QR
-            </Button>
+              Download vector SVG
+            </button>
           </div>
 
           <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
             <p className="text-xs text-text-tertiary">
-              NFC tags can be programmed with this same URL.
+              Program NFC tags with this same URL.
             </p>
             <Link
-              to={`/review/${business.id}`}
+              to={`/review/${business.publicId || business.id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 shrink-0"

@@ -44,9 +44,9 @@ export default function LoginPage() {
           <span className="text-lg font-bold text-white tracking-tight">
             ReviewBuddy
           </span>
-          <span className="text-xs font-medium text-[#7A7E7B] tracking-wider uppercase">
+          {/* <span className="text-xs font-medium text-[#7A7E7B] tracking-wider uppercase">
             Admin Console
-          </span>
+          </span> */}
         </div>
 
         <div className="relative z-10 max-w-md">

@@ -1,25 +1,17 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import { authApi } from '../services/api'
 
 const AuthContext = createContext(null)
 
-// Mock credentials for Phase 1 development
-const MOCK_CREDENTIALS = {
-  email: 'admin@reviewbuddy.com',
-  password: 'password',
-}
-
-const MOCK_USER = {
-  id: '1',
-  name: 'Admin',
-  email: 'admin@reviewbuddy.com',
-  role: 'Administrator',
-  avatar: null,
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('rb_user')
-    return stored ? JSON.parse(stored) : null
+    try {
+      const stored = localStorage.getItem('rb_user')
+      const token = localStorage.getItem('rb_token')
+      return stored && token ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -28,31 +20,27 @@ export function AuthProvider({ children }) {
     setIsLoading(true)
     setError(null)
 
-    // TODO: Replace with actual API call to POST /api/auth/login
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-
-      if (
-        email === MOCK_CREDENTIALS.email &&
-        password === MOCK_CREDENTIALS.password
-      ) {
-        const userData = { ...MOCK_USER, email }
-        localStorage.setItem('rb_user', JSON.stringify(userData))
-        setUser(userData)
-        return true
-      } else {
-        setError('Invalid email or password')
-        return false
-      }
-    } catch {
-      setError('Something went wrong. Please try again.')
+      const data = await authApi.login(email, password)
+      localStorage.setItem('rb_token', data.token)
+      localStorage.setItem('rb_user', JSON.stringify(data.user))
+      setUser(data.user)
+      return true
+    } catch (err) {
+      setError(err.message || 'Invalid email or password')
       return false
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout()
+    } catch {
+      // Ignore network errors on logout
+    }
+    localStorage.removeItem('rb_token')
     localStorage.removeItem('rb_user')
     setUser(null)
     setError(null)

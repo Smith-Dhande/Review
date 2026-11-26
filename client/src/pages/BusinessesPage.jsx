@@ -7,6 +7,8 @@ import StatusText from '../components/ui/StatusText'
 import Button from '../components/ui/Button'
 import SlideDownPanel from '../components/ui/SlideDownPanel'
 import Input from '../components/ui/Input'
+import BusinessLogo from '../components/ui/BusinessLogo'
+import LogoUpload from '../components/ui/LogoUpload'
 import { useBusinesses } from '../context/BusinessesContext'
 import { businessCategories } from '../data/mockData'
 
@@ -21,6 +23,7 @@ const formatDate = (dateStr) => {
 
 const initialFormState = {
   name: '',
+  logoUrl: '',
   category: businessCategories[0] || 'Restaurant',
   location: '',
   address: '',
@@ -74,6 +77,7 @@ export default function BusinessesPage() {
     setEditingId(business.id)
     setFormData({
       name: business.name || '',
+      logoUrl: business.logoUrl || '',
       category: business.category || businessCategories[0],
       location: business.location || '',
       address: business.address || '',
@@ -97,24 +101,36 @@ export default function BusinessesPage() {
     setFormData(initialFormState)
   }
 
-  const handleSave = (e) => {
+  const [isSaving, setIsSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const handleSave = async (e) => {
     e.preventDefault()
     if (!formData.name.trim()) return
 
-    if (editingId) {
-      updateBusiness(editingId, {
-        name: formData.name,
-        category: formData.category,
-        location: formData.location,
-        address: formData.address,
-        phone: formData.phone,
-        email: formData.email,
-        status: formData.status,
-      })
-    } else {
-      addBusiness(formData)
+    setIsSaving(true)
+    setFormError('')
+    try {
+      if (editingId) {
+        await updateBusiness(editingId, {
+          name: formData.name,
+          logoUrl: formData.logoUrl,
+          category: formData.category,
+          location: formData.location,
+          address: formData.address,
+          phone: formData.phone,
+          email: formData.email,
+          status: formData.status,
+        })
+      } else {
+        await addBusiness(formData)
+      }
+      handleClosePanel()
+    } catch (err) {
+      setFormError(err.message || 'Could not save business')
+    } finally {
+      setIsSaving(false)
     }
-    handleClosePanel()
   }
 
   const columns = [
@@ -123,9 +139,12 @@ export default function BusinessesPage() {
       label: 'Business',
       render: (_, row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-md bg-surface border border-border flex items-center justify-center text-xs font-semibold text-text-primary shrink-0">
-            {row.logoText}
-          </div>
+          <BusinessLogo
+            logoUrl={row.logoUrl}
+            logoText={row.logoText}
+            name={row.name}
+            size="sm"
+          />
           <div>
             <div className="text-sm font-medium text-text-primary">
               {row.name}
@@ -230,6 +249,15 @@ export default function BusinessesPage() {
         title={editingId ? 'Edit Business' : 'Add New Business'}
       >
         <form onSubmit={handleSave}>
+          <div className="mb-4">
+            <LogoUpload
+              value={formData.logoUrl}
+              onChange={(url) =>
+                setFormData((prev) => ({ ...prev, logoUrl: url }))
+              }
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Business Name"
@@ -338,6 +366,15 @@ export default function BusinessesPage() {
             )}
           </div>
 
+          {formError && (
+            <div
+              role="alert"
+              className="bg-error-light border border-error-border rounded-md px-3 py-2 text-xs text-error mt-4"
+            >
+              {formError}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-5">
             <Button
               type="button"
@@ -346,7 +383,7 @@ export default function BusinessesPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" loading={isSaving}>
               {editingId ? 'Save Changes' : 'Save Business'}
             </Button>
           </div>

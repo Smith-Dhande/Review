@@ -23,13 +23,35 @@ export default function DashboardPage() {
   const [customFrom, setCustomFrom] = useState('2026-01-01')
   const [customTo, setCustomTo] = useState('2026-11-26')
 
-  const rangeData = dashboardAnalyticsByRange[range] || dashboardAnalyticsByRange['30d']
+  const rangeData =
+    dashboardAnalyticsByRange[range] || dashboardAnalyticsByRange['30d']
 
   const liveCounts = useMemo(() => {
-    const total = businesses.length
-    const active = businesses.filter((b) => b.status === 'active').length
-    const paused = businesses.filter((b) => b.status === 'paused').length
-    return { total, active, paused }
+    return businesses.reduce(
+      (acc, biz) => {
+        acc.total += 1
+        if (biz.status === 'active') acc.active += 1
+        if (biz.status === 'paused') acc.paused += 1
+        acc.totalScans += biz.analytics?.totalScans || 0
+        acc.landingViews += biz.analytics?.landingViews || 0
+        acc.completions += biz.analytics?.questionnaireCompletions || 0
+        acc.drafts += biz.analytics?.reviewDraftsGenerated || 0
+        acc.copies += biz.analytics?.copyClicks || 0
+        acc.redirects += biz.analytics?.googleReviewRedirects || 0
+        return acc
+      },
+      {
+        total: 0,
+        active: 0,
+        paused: 0,
+        totalScans: 0,
+        landingViews: 0,
+        completions: 0,
+        drafts: 0,
+        copies: 0,
+        redirects: 0,
+      },
+    )
   }, [businesses])
 
   const metrics = useMemo(
@@ -37,34 +59,42 @@ export default function DashboardPage() {
       { label: 'Total Businesses', value: liveCounts.total.toLocaleString() },
       { label: 'Active Businesses', value: liveCounts.active.toLocaleString() },
       { label: 'Paused Businesses', value: liveCounts.paused.toLocaleString() },
-      {
-        label: 'Total Scans',
-        value: rangeData.stats.totalScans.toLocaleString(),
-      },
+      { label: 'Total Scans', value: liveCounts.totalScans.toLocaleString() },
       {
         label: 'Questionnaire Completions',
-        value: rangeData.stats.questionnaireCompletions.toLocaleString(),
+        value: liveCounts.completions.toLocaleString(),
       },
       {
         label: 'Review Drafts Generated',
-        value: rangeData.stats.reviewDraftsGenerated.toLocaleString(),
+        value: liveCounts.drafts.toLocaleString(),
       },
-      {
-        label: 'Copy Clicks',
-        value: rangeData.stats.copyClicks.toLocaleString(),
-      },
+      { label: 'Copy Clicks', value: liveCounts.copies.toLocaleString() },
       {
         label: 'Google Review Redirects',
-        value: rangeData.stats.googleReviewRedirects.toLocaleString(),
+        value: liveCounts.redirects.toLocaleString(),
         hint: 'Outbound clicks',
       },
     ],
-    [liveCounts, rangeData],
+    [liveCounts],
+  )
+
+  const liveJourney = useMemo(
+    () => [
+      { stage: 'Total Scans', count: liveCounts.totalScans },
+      { stage: 'Landing-Page Views', count: liveCounts.landingViews },
+      { stage: 'Questionnaire Completions', count: liveCounts.completions },
+      { stage: 'Review Drafts Generated', count: liveCounts.drafts },
+      { stage: 'Copy Clicks', count: liveCounts.copies },
+      { stage: 'Google Review Redirects', count: liveCounts.redirects },
+    ],
+    [liveCounts],
   )
 
   const businessPerformance = useMemo(() => {
     return [...businesses]
-      .sort((a, b) => (b.analytics?.totalScans || 0) - (a.analytics?.totalScans || 0))
+      .sort(
+        (a, b) => (b.analytics?.totalScans || 0) - (a.analytics?.totalScans || 0),
+      )
       .slice(0, 8)
   }, [businesses])
 
@@ -183,7 +213,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Quick Statistics — clean typographic grid with hairline separators */}
+      {/* Quick Statistics */}
       <section
         aria-label="Quick statistics"
         className="bg-card rounded-lg border border-border overflow-hidden"
@@ -228,7 +258,7 @@ export default function DashboardPage() {
           <ScanActivityChart data={rangeData.scanActivity} />
         </ChartCard>
 
-        <CustomerJourneyCard stages={rangeData.journey} />
+        <CustomerJourneyCard stages={liveJourney} />
       </div>
 
       {/* Business Performance */}
@@ -238,7 +268,8 @@ export default function DashboardPage() {
             Business Performance
           </h2>
           <p className="text-xs text-text-tertiary mt-0.5">
-            Top businesses ranked by engagement. Click any row to open its workspace.
+            Top businesses ranked by engagement. Click any row to open its
+            workspace.
           </p>
         </div>
 
@@ -247,7 +278,7 @@ export default function DashboardPage() {
           data={businessPerformance}
           searchable={false}
           pagination={false}
-          onRowClick={(row) => navigate(`/businesses/${row.id}`)}
+          onRowClick={(row) => navigate(`/businesses/${row.publicId || row.id}`)}
         />
       </section>
     </div>

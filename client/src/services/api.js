@@ -1,13 +1,19 @@
 /**
  * Centralized API service layer.
- *
- * All backend calls go through this module so the frontend
- * has a single place to swap mock data for real endpoints.
- *
- * Base URL is proxied via vite.config.js → http://localhost:3001
+ * Uses VITE_API_URL if configured for production, otherwise /api (proxied in vite.config.js).
  */
 
-const BASE = '/api'
+const BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '')
+
+export function resolveAssetUrl(url) {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url
+  if (BASE.startsWith('http') && url.startsWith('/api')) {
+    const origin = BASE.replace(/\/api$/, '')
+    return `${origin}${url}`
+  }
+  return url
+}
 
 async function request(path, options = {}) {
   const url = `${BASE}${path}`
@@ -17,9 +23,10 @@ async function request(path, options = {}) {
     ...options.headers,
   }
 
-  // TODO: attach auth token when backend is ready
-  // const token = localStorage.getItem('rb_token')
-  // if (token) headers['Authorization'] = `Bearer ${token}`
+  const token = localStorage.getItem('rb_token')
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
 
   const res = await fetch(url, { ...options, headers })
 
@@ -34,7 +41,7 @@ async function request(path, options = {}) {
 }
 
 // ── Auth ────────────────────────────────────────────────
-export const auth = {
+export const authApi = {
   login: (email, password) =>
     request('/auth/login', {
       method: 'POST',
@@ -43,9 +50,9 @@ export const auth = {
   logout: () => request('/auth/logout', { method: 'POST' }),
 }
 
-// ── Businesses (includes review config, questionnaire, single public URL/QR) ──
-export const businesses = {
-  list: (params) => request(`/businesses?${new URLSearchParams(params)}`),
+// ── Businesses (Admin) ──────────────────────────────────
+export const businessesApi = {
+  list: () => request('/businesses'),
   get: (id) => request(`/businesses/${id}`),
   create: (data) =>
     request('/businesses', {
@@ -57,26 +64,30 @@ export const businesses = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  delete: (id) => request(`/businesses/${id}`, { method: 'DELETE' }),
   updateQuestions: (id, questions) =>
     request(`/businesses/${id}/questions`, {
       method: 'PUT',
       body: JSON.stringify({ questions }),
     }),
+  uploadLogo: ({ mimeType, dataBase64 }) =>
+    request('/businesses/upload-logo', {
+      method: 'POST',
+      body: JSON.stringify({ mimeType, dataBase64 }),
+    }),
+  getQr: (id) => request(`/businesses/${id}/qr?format=json`),
 }
 
 // ── Public Customer Review Experience ───────────────────
-export const publicReview = {
-  getByBusiness: (businessId) => request(`/public/review/${businessId}`),
-  trackEvent: (businessId, event) =>
-    request(`/public/review/${businessId}/events`, {
+export const publicReviewApi = {
+  getByBusiness: (publicId) => request(`/public/businesses/${publicId}`),
+  completeQuestionnaire: (publicId, answers, isRegenerate = false) =>
+    request(`/public/businesses/${publicId}/questionnaire/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ answers, isRegenerate }),
+    }),
+  trackEvent: (publicId, event) =>
+    request(`/public/businesses/${publicId}/events`, {
       method: 'POST',
       body: JSON.stringify({ event }),
     }),
-}
-
-// ── Analytics ───────────────────────────────────────────
-export const analytics = {
-  overview: (params) =>
-    request(`/analytics/overview?${new URLSearchParams(params)}`),
 }
