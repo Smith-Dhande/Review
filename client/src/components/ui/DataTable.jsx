@@ -16,6 +16,7 @@ export default function DataTable({
   emptyTitle = 'No data found',
   emptyDescription = 'There are no records to display.',
   pagination = true,
+  onRowClick,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -88,7 +89,10 @@ export default function DataTable({
                   {displayedData.map((row, rowIndex) => (
                     <tr
                       key={row.id ?? row._id ?? startIndex + rowIndex}
-                      className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors duration-150"
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      className={`border-b border-border last:border-0 hover:bg-surface/60 transition-colors duration-150 ${
+                        onRowClick ? 'cursor-pointer' : ''
+                      }`}
                     >
                       {columns.map((column) => {
                         const value = row[column.key]

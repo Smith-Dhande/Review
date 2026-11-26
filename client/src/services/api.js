@@ -43,7 +43,7 @@ export const auth = {
   logout: () => request('/auth/logout', { method: 'POST' }),
 }
 
-// ── Businesses ──────────────────────────────────────────
+// ── Businesses (includes review config, questionnaire, single public URL/QR) ──
 export const businesses = {
   list: (params) => request(`/businesses?${new URLSearchParams(params)}`),
   get: (id) => request(`/businesses/${id}`),
@@ -58,35 +58,25 @@ export const businesses = {
       body: JSON.stringify(data),
     }),
   delete: (id) => request(`/businesses/${id}`, { method: 'DELETE' }),
+  updateQuestions: (id, questions) =>
+    request(`/businesses/${id}/questions`, {
+      method: 'PUT',
+      body: JSON.stringify({ questions }),
+    }),
 }
 
-// ── QR Codes ────────────────────────────────────────────
-export const qrCodes = {
-  list: (params) => request(`/qr-codes?${new URLSearchParams(params)}`),
-  get: (id) => request(`/qr-codes/${id}`),
-  create: (data) =>
-    request('/qr-codes', {
+// ── Public Customer Review Experience ───────────────────
+export const publicReview = {
+  getByBusiness: (businessId) => request(`/public/review/${businessId}`),
+  trackEvent: (businessId, event) =>
+    request(`/public/review/${businessId}/events`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ event }),
     }),
-  delete: (id) => request(`/qr-codes/${id}`, { method: 'DELETE' }),
-}
-
-// ── NFC Tags ────────────────────────────────────────────
-export const nfcTags = {
-  list: (params) => request(`/nfc-tags?${new URLSearchParams(params)}`),
-  get: (id) => request(`/nfc-tags/${id}`),
-  create: (data) =>
-    request('/nfc-tags', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  delete: (id) => request(`/nfc-tags/${id}`, { method: 'DELETE' }),
 }
 
 // ── Analytics ───────────────────────────────────────────
 export const analytics = {
-  overview: () => request('/analytics/overview'),
-  scanActivity: (params) =>
-    request(`/analytics/scans?${new URLSearchParams(params)}`),
+  overview: (params) =>
+    request(`/analytics/overview?${new URLSearchParams(params)}`),
 }

@@ -1,220 +1,255 @@
-import { useMemo } from 'react'
-import { Building2, QrCode, Wifi, BarChart3, FileText } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
-import StatCard from '../components/ui/StatCard'
 import ChartCard from '../components/ui/ChartCard'
 import DataTable from '../components/ui/DataTable'
 import StatusText from '../components/ui/StatusText'
 import ScanActivityChart from '../components/charts/ScanActivityChart'
-import QrNfcComparisonChart from '../components/charts/QrNfcComparisonChart'
-import {
-  dashboardStats,
-  scanActivityData,
-  qrNfcComparisonData,
-  recentActivity,
-  businessesData,
-} from '../data/mockData'
+import CustomerJourneyCard from '../components/charts/CustomerJourneyCard'
+import { useBusinesses } from '../context/BusinessesContext'
+import { dashboardAnalyticsByRange } from '../data/mockData'
 
-const ACTIVITY_DOT_CLASSES = {
-  scan: 'bg-primary',
-  review: 'bg-chart-3',
-  business: 'bg-chart-2',
-}
-
-function formatDate(dateString) {
-  if (!dateString) return '—'
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return dateString
-  return date.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function resolveRow(firstArg, secondArg) {
-  return typeof firstArg === 'object' && firstArg !== null ? firstArg : secondArg
-}
+const DATE_RANGES = [
+  { id: '7d', label: '7 days' },
+  { id: '30d', label: '30 days' },
+  { id: '90d', label: '90 days' },
+  { id: 'custom', label: 'Custom' },
+]
 
 export default function DashboardPage() {
-  const recentBusinesses = useMemo(() => businessesData.slice(0, 5), [])
+  const navigate = useNavigate()
+  const { businesses } = useBusinesses()
+  const [range, setRange] = useState('30d')
+  const [customFrom, setCustomFrom] = useState('2026-01-01')
+  const [customTo, setCustomTo] = useState('2026-11-26')
 
-  const columns = useMemo(
+  const rangeData = dashboardAnalyticsByRange[range] || dashboardAnalyticsByRange['30d']
+
+  const liveCounts = useMemo(() => {
+    const total = businesses.length
+    const active = businesses.filter((b) => b.status === 'active').length
+    const paused = businesses.filter((b) => b.status === 'paused').length
+    return { total, active, paused }
+  }, [businesses])
+
+  const metrics = useMemo(
+    () => [
+      { label: 'Total Businesses', value: liveCounts.total.toLocaleString() },
+      { label: 'Active Businesses', value: liveCounts.active.toLocaleString() },
+      { label: 'Paused Businesses', value: liveCounts.paused.toLocaleString() },
+      {
+        label: 'Total Scans',
+        value: rangeData.stats.totalScans.toLocaleString(),
+      },
+      {
+        label: 'Questionnaire Completions',
+        value: rangeData.stats.questionnaireCompletions.toLocaleString(),
+      },
+      {
+        label: 'Review Drafts Generated',
+        value: rangeData.stats.reviewDraftsGenerated.toLocaleString(),
+      },
+      {
+        label: 'Copy Clicks',
+        value: rangeData.stats.copyClicks.toLocaleString(),
+      },
+      {
+        label: 'Google Review Redirects',
+        value: rangeData.stats.googleReviewRedirects.toLocaleString(),
+        hint: 'Outbound clicks',
+      },
+    ],
+    [liveCounts, rangeData],
+  )
+
+  const businessPerformance = useMemo(() => {
+    return [...businesses]
+      .sort((a, b) => (b.analytics?.totalScans || 0) - (a.analytics?.totalScans || 0))
+      .slice(0, 8)
+  }, [businesses])
+
+  const performanceColumns = useMemo(
     () => [
       {
         key: 'name',
         label: 'Business',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return (
+        render: (_, row) => (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-md bg-surface border border-border flex items-center justify-center text-xs font-semibold text-text-primary shrink-0">
+              {row.logoText}
+            </div>
             <div>
               <p className="font-medium text-text-primary">{row.name}</p>
-              <p className="text-xs text-text-tertiary">{row.city}</p>
+              <p className="text-xs text-text-tertiary">
+                {row.category}
+                {row.location ? ` · ${row.location}` : ''}
+              </p>
             </div>
-          )
-        },
-      },
-      {
-        key: 'category',
-        label: 'Category',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return <span className="text-text-secondary">{row.category}</span>
-        },
+          </div>
+        ),
       },
       {
         key: 'status',
         label: 'Status',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return <StatusText status={row.status} />
-        },
-      },
-      {
-        key: 'qrCodes',
-        label: 'QR Codes',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return <span className="text-text-primary">{row.qrCodes}</span>
-        },
-      },
-      {
-        key: 'nfcTags',
-        label: 'NFC Tags',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return <span className="text-text-primary">{row.nfcTags}</span>
-        },
+        render: (_, row) => <StatusText status={row.status} />,
       },
       {
         key: 'totalScans',
         label: 'Total Scans',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return (
-            <span className="font-medium text-text-primary">
-              {row.totalScans.toLocaleString()}
-            </span>
-          )
-        },
+        render: (_, row) => (
+          <span className="tabular-nums text-text-primary">
+            {(row.analytics?.totalScans || 0).toLocaleString()}
+          </span>
+        ),
       },
       {
-        key: 'dateAdded',
-        label: 'Date Added',
-        render: (arg1, arg2) => {
-          const row = resolveRow(arg1, arg2)
-          return (
-            <span className="text-text-secondary">{formatDate(row.dateAdded)}</span>
-          )
-        },
+        key: 'completions',
+        label: 'Completions',
+        render: (_, row) => (
+          <span className="tabular-nums text-text-secondary">
+            {(row.analytics?.questionnaireCompletions || 0).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        key: 'reviewDrafts',
+        label: 'Drafts',
+        render: (_, row) => (
+          <span className="tabular-nums text-text-secondary">
+            {(row.analytics?.reviewDraftsGenerated || 0).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        key: 'googleRedirects',
+        label: 'Google Redirects',
+        render: (_, row) => (
+          <span className="tabular-nums font-medium text-text-primary">
+            {(row.analytics?.googleReviewRedirects || 0).toLocaleString()}
+          </span>
+        ),
       },
     ],
     [],
   )
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Overview"
-        description="Dashboard overview and key metrics"
+        title="Dashboard"
+        description="Platform overview, scan performance, and customer journey"
+        actions={
+          <div
+            role="group"
+            aria-label="Date range filter"
+            className="inline-flex items-center rounded-md border border-border bg-card p-0.5"
+          >
+            {DATE_RANGES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setRange(item.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${
+                  range === item.id
+                    ? 'bg-surface text-text-primary'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-6">
-        <StatCard
-          title="Total Businesses"
-          value={dashboardStats.totalBusinesses}
-          icon={Building2}
-        />
-        <StatCard
-          title="Active Businesses"
-          value={dashboardStats.activeBusinesses}
-          icon={Building2}
-          change="+2 this month"
-          changeType="positive"
-        />
-        <StatCard
-          title="Total QR Codes"
-          value={dashboardStats.totalQrCodes}
-          icon={QrCode}
-        />
-        <StatCard
-          title="Total NFC Tags"
-          value={dashboardStats.totalNfcTags}
-          icon={Wifi}
-        />
-        <StatCard
-          title="Total Scans"
-          value={dashboardStats.totalScans.toLocaleString()}
-          icon={BarChart3}
-          change="+18%"
-          changeType="positive"
-        />
-        <StatCard
-          title="Reviews Generated"
-          value={dashboardStats.reviewDraftsGenerated.toLocaleString()}
-          icon={FileText}
-          change="+12%"
-          changeType="positive"
-        />
+      {range === 'custom' && (
+        <div className="flex flex-wrap items-center gap-3 bg-card border border-border rounded-lg px-4 py-3 text-xs">
+          <span className="font-medium text-text-secondary">Custom range:</span>
+          <input
+            type="date"
+            aria-label="Start date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-primary"
+          />
+          <span className="text-text-tertiary">to</span>
+          <input
+            type="date"
+            aria-label="End date"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-primary"
+          />
+        </div>
+      )}
+
+      {/* Quick Statistics — clean typographic grid with hairline separators */}
+      <section
+        aria-label="Quick statistics"
+        className="bg-card rounded-lg border border-border overflow-hidden"
+      >
+        <div className="grid grid-cols-2 lg:grid-cols-4">
+          {metrics.map((metric, idx) => {
+            const isTopRow = idx < 4
+            return (
+              <div
+                key={metric.label}
+                className={`px-5 py-4 border-border ${
+                  isTopRow ? 'border-b' : 'border-b lg:border-b-0'
+                } ${idx % 2 === 0 ? 'border-r' : 'lg:border-r'} ${
+                  idx === 3 || idx === 7 ? 'lg:border-r-0' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-text-secondary">
+                    {metric.label}
+                  </p>
+                  {metric.hint && (
+                    <span className="text-[11px] text-text-tertiary">
+                      {metric.hint}
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xl font-semibold tracking-tight text-text-primary tabular-nums mt-1.5">
+                  {metric.value}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* Scan Activity & Customer Journey */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Scan Activity"
+          description="Total scans over the selected period"
+        >
+          <ScanActivityChart data={rangeData.scanActivity} />
+        </ChartCard>
+
+        <CustomerJourneyCard stages={rangeData.journey} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
-        <div className="lg:col-span-3">
-          <ChartCard
-            title="Scan Activity"
-            description="Scans over the last 12 months"
-          >
-            <ScanActivityChart data={scanActivityData} />
-          </ChartCard>
+      {/* Business Performance */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">
+            Business Performance
+          </h2>
+          <p className="text-xs text-text-tertiary mt-0.5">
+            Top businesses ranked by engagement. Click any row to open its workspace.
+          </p>
         </div>
 
-        <div className="lg:col-span-2">
-          <ChartCard
-            title="QR vs NFC"
-            description="Usage comparison"
-          >
-            <QrNfcComparisonChart data={qrNfcComparisonData} />
-          </ChartCard>
-
-          <div className="mt-6 bg-card rounded-lg border border-border">
-            <h3 className="px-5 pt-5 pb-3 text-sm font-semibold text-text-primary">
-              Recent Activity
-            </h3>
-            <ul className="divide-y divide-border">
-              {recentActivity.map((item) => (
-                <li
-                  key={item.id}
-                  className="px-5 py-3 flex items-start gap-3"
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                      ACTIVITY_DOT_CLASSES[item.type] || 'bg-chart-2'
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm text-text-primary">{item.message}</p>
-                    <p className="text-xs text-text-tertiary mt-0.5">
-                      {item.time}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <h2 className="text-lg font-semibold text-text-primary mb-4">
-          Recent Businesses
-        </h2>
         <DataTable
-          columns={columns}
-          data={recentBusinesses}
+          columns={performanceColumns}
+          data={businessPerformance}
           searchable={false}
           pagination={false}
+          onRowClick={(row) => navigate(`/businesses/${row.id}`)}
         />
-      </div>
+      </section>
     </div>
   )
 }

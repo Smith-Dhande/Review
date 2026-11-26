@@ -3,6 +3,10 @@ const statusConfig = {
     label: 'Active',
     colorClass: 'text-status-active',
   },
+  paused: {
+    label: 'Paused',
+    colorClass: 'text-status-pending',
+  },
   inactive: {
     label: 'Inactive',
     colorClass: 'text-status-inactive',

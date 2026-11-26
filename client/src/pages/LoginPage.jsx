@@ -16,53 +16,87 @@ export default function LoginPage() {
     e.preventDefault()
     const success = await login(email.trim(), password)
     if (success) {
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Brand Panel */}
-      <div className="hidden md:flex md:w-[55%] bg-[#111] relative overflow-hidden flex-col justify-between p-10">
-        {/* Geometric decoration */}
-        <div className="absolute -bottom-20 -left-20 w-[500px] h-[500px] border-2 border-[#1B6B4A]/20 rounded-full pointer-events-none" />
-        <div className="absolute top-20 right-10 w-[300px] h-[300px] border border-[#1B6B4A]/10 rounded-full pointer-events-none" />
-        <div className="absolute w-full h-px bg-gradient-to-r from-transparent via-[#1B6B4A]/20 to-transparent top-1/2 left-0 pointer-events-none" />
-        <div className="absolute top-1/3 -right-24 w-[420px] h-px bg-gradient-to-r from-transparent via-[#1B6B4A]/15 to-transparent rotate-45 pointer-events-none" />
-        <div className="absolute bottom-24 right-24 w-32 h-32 border border-[#1B6B4A]/10 rotate-45 pointer-events-none" />
+    <div className="min-h-screen flex bg-bg">
+      {/* Left Brand Panel — Editorial architectural composition */}
+      <div className="hidden md:flex md:w-[54%] bg-[#121312] relative overflow-hidden flex-col justify-between p-12 border-r border-[#232523]">
+        {/* Subtle architectural grid lines */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
+          }}
+        />
+        {/* Restrained single-accent hairline */}
+        <div
+          aria-hidden="true"
+          className="absolute top-0 left-12 w-px h-full bg-[#1B6B4A]/30 pointer-events-none"
+        />
 
-        <div className="text-xl font-bold text-white tracking-tight relative z-10">
-          ReviewBuddy
+        <div className="relative z-10 flex items-center justify-between">
+          <span className="text-lg font-bold text-white tracking-tight">
+            ReviewBuddy
+          </span>
+          <span className="text-xs font-medium text-[#7A7E7B] tracking-wider uppercase">
+            Admin Console
+          </span>
         </div>
 
-        <div className="relative z-10">
-          <h1 className="text-[42px] leading-tight font-semibold text-white tracking-tight">
-            Manage reviews,
-            <br />
-            build reputation.
-          </h1>
-          <p className="text-base text-[#888] mt-4">
-            Smart review generation for local businesses.
+        <div className="relative z-10 max-w-md">
+          <p className="text-xs font-medium uppercase tracking-widest text-[#3B9B72] mb-4">
+            QR &amp; NFC Review Operations
           </p>
+          <h1 className="text-[40px] leading-[1.12] font-semibold text-white tracking-tight">
+            Manage businesses,
+            <br />
+            streamline feedback.
+          </h1>
+          <p className="text-sm text-[#9A9E9B] leading-relaxed mt-5">
+            Configure custom questionnaires, deploy QR and NFC touchpoints, and
+            monitor customer journey conversion across every location.
+          </p>
+
+          {/* Structured spec strip */}
+          <div className="mt-10 pt-6 border-t border-[#262826] grid grid-cols-3 gap-6">
+            <div>
+              <p className="text-xs text-[#6E726F]">Touchpoints</p>
+              <p className="text-sm font-medium text-white mt-1">QR &amp; NFC</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#6E726F]">Workflow</p>
+              <p className="text-sm font-medium text-white mt-1">Guided Drafts</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#6E726F]">Access</p>
+              <p className="text-sm font-medium text-white mt-1">Internal Only</p>
+            </div>
+          </div>
         </div>
 
-        <div className="text-xs text-[#555] relative z-10">
+        <div className="relative z-10 text-xs text-[#5E625F]">
           © 2026 ReviewBuddy
         </div>
       </div>
 
       {/* Right Form Panel */}
-      <div className="flex-1 bg-bg flex items-center justify-center p-6 md:p-12">
-        <div className="w-full max-w-sm">
-          <div className="text-xl font-bold text-text-primary tracking-tight mb-8 md:hidden">
+      <div className="flex-1 bg-bg flex items-center justify-center p-6 sm:p-10 md:p-14">
+        <div className="w-full max-w-[360px]">
+          <div className="text-lg font-bold text-text-primary tracking-tight mb-8 md:hidden">
             ReviewBuddy
           </div>
 
-          <h2 className="text-[28px] font-semibold tracking-tight text-text-primary">
-            Welcome back
+          <h2 className="text-[26px] font-semibold tracking-tight text-text-primary">
+            Sign in
           </h2>
-          <p className="text-sm text-text-secondary mt-2 mb-8">
-            Sign in to your admin account
+          <p className="text-sm text-text-secondary mt-1.5 mb-8">
+            Enter your administrator credentials to continue.
           </p>
 
           <form onSubmit={handleSubmit}>
@@ -102,20 +136,27 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                id="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-3.5 h-3.5 rounded accent-primary cursor-pointer"
-              />
+            <div className="mt-4 flex items-center justify-between">
               <label
                 htmlFor="remember-me"
-                className="text-sm text-text-secondary cursor-pointer select-none"
+                className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none"
               >
-                Remember me
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded accent-primary cursor-pointer"
+                />
+                <span>Remember me</span>
               </label>
+
+              <button
+                type="button"
+                className="text-xs text-text-secondary hover:text-primary cursor-pointer transition-colors duration-150"
+              >
+                Forgot password?
+              </button>
             </div>
 
             <Button
@@ -126,15 +167,6 @@ export default function LoginPage() {
             >
               Sign in
             </Button>
-
-            <div className="text-center mt-4">
-              <button
-                type="button"
-                className="text-sm text-text-secondary hover:text-primary cursor-pointer transition-colors duration-150"
-              >
-                Forgot password?
-              </button>
-            </div>
           </form>
         </div>
       </div>

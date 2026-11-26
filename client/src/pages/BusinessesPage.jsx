@@ -1,19 +1,14 @@
-import { useState } from 'react'
-import { Building2, MoreHorizontal, Plus } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Building2, Plus } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DataTable from '../components/ui/DataTable'
 import StatusText from '../components/ui/StatusText'
 import Button from '../components/ui/Button'
 import SlideDownPanel from '../components/ui/SlideDownPanel'
 import Input from '../components/ui/Input'
-import {
-  businessesData,
-  businessCategories,
-  indianCities,
-} from '../data/mockData'
-
-const getRow = (arg1, arg2) =>
-  arg2 && typeof arg2 === 'object' ? arg2 : arg1
+import { useBusinesses } from '../context/BusinessesContext'
+import { businessCategories } from '../data/mockData'
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '—'
@@ -26,38 +21,99 @@ const formatDate = (dateStr) => {
 
 const initialFormState = {
   name: '',
-  category: businessCategories[0] || '',
-  city: indianCities[0] || '',
-  googleMapsUrl: '',
+  category: businessCategories[0] || 'Restaurant',
+  location: '',
+  address: '',
+  phone: '',
+  email: '',
+  googleReviewUrl: '',
+  welcomeMessage: '',
   status: 'active',
 }
 
 export default function BusinessesPage() {
+  const navigate = useNavigate()
+  const { businesses, addBusiness, updateBusiness, toggleBusinessStatus } =
+    useBusinesses()
+
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormState)
 
-  const filteredBusinesses = businessesData.filter((business) => {
+  const filteredBusinesses = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return true
-    return (
-      business.name.toLowerCase().includes(query) ||
-      business.category.toLowerCase().includes(query) ||
-      business.city.toLowerCase().includes(query)
-    )
-  })
+    return businesses.filter((business) => {
+      const matchesStatus =
+        statusFilter === 'all' || business.status === statusFilter
+      if (!matchesStatus) return false
+      if (!query) return true
+      return (
+        business.name.toLowerCase().includes(query) ||
+        business.category.toLowerCase().includes(query) ||
+        (business.location || '').toLowerCase().includes(query) ||
+        (business.email || '').toLowerCase().includes(query) ||
+        (business.phone || '').toLowerCase().includes(query)
+      )
+    })
+  }, [businesses, search, statusFilter])
 
   const handleFieldChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
+  const handleOpenAdd = () => {
+    setEditingId(null)
+    setFormData(initialFormState)
+    setIsPanelOpen(true)
+  }
+
+  const handleOpenEdit = (e, business) => {
+    e.stopPropagation()
+    setEditingId(business.id)
+    setFormData({
+      name: business.name || '',
+      category: business.category || businessCategories[0],
+      location: business.location || '',
+      address: business.address || '',
+      phone: business.phone || '',
+      email: business.email || '',
+      googleReviewUrl: business.reviewConfig?.googleReviewUrl || '',
+      welcomeMessage: business.reviewConfig?.welcomeMessage || '',
+      status: business.status || 'active',
+    })
+    setIsPanelOpen(true)
+  }
+
+  const handleToggleStatus = (e, businessId) => {
+    e.stopPropagation()
+    toggleBusinessStatus(businessId)
+  }
+
   const handleClosePanel = () => {
     setIsPanelOpen(false)
+    setEditingId(null)
     setFormData(initialFormState)
   }
 
   const handleSave = (e) => {
     e.preventDefault()
+    if (!formData.name.trim()) return
+
+    if (editingId) {
+      updateBusiness(editingId, {
+        name: formData.name,
+        category: formData.category,
+        location: formData.location,
+        address: formData.address,
+        phone: formData.phone,
+        email: formData.email,
+        status: formData.status,
+      })
+    } else {
+      addBusiness(formData)
+    }
     handleClosePanel()
   }
 
@@ -65,105 +121,93 @@ export default function BusinessesPage() {
     {
       key: 'name',
       label: 'Business',
-      header: 'Business',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
+      render: (_, row) => (
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-md bg-surface border border-border flex items-center justify-center text-xs font-semibold text-text-primary shrink-0">
+            {row.logoText}
+          </div>
           <div>
             <div className="text-sm font-medium text-text-primary">
               {row.name}
             </div>
-            <div className="text-xs text-text-tertiary">{row.city}</div>
+            {row.location && (
+              <div className="text-xs text-text-tertiary">{row.location}</div>
+            )}
           </div>
-        )
-      },
+        </div>
+      ),
     },
     {
       key: 'category',
       label: 'Category',
-      header: 'Category',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return <span className="text-sm text-text-secondary">{row.category}</span>
+      render: (_, row) => (
+        <span className="text-sm text-text-secondary">{row.category}</span>
+      ),
+    },
+    {
+      key: 'contact',
+      label: 'Contact',
+      render: (_, row) => (
+        <div>
+          <div className="text-sm text-text-primary">{row.phone || '—'}</div>
+          {row.email && (
+            <div className="text-xs text-text-tertiary">{row.email}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'questions',
+      label: 'Questionnaire',
+      render: (_, row) => {
+        const count = row.questions?.length || 0
+        if (count === 0) {
+          return (
+            <span className="text-xs text-text-tertiary">Not configured</span>
+          )
+        }
+        return (
+          <span className="text-sm text-text-secondary tabular-nums">
+            {count} {count === 1 ? 'question' : 'questions'}
+          </span>
+        )
       },
     },
     {
       key: 'status',
       label: 'Status',
-      header: 'Status',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return <StatusText status={row.status} />
-      },
-    },
-    {
-      key: 'qrCodes',
-      label: 'QR Codes',
-      header: 'QR Codes',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
-          <span className="text-sm text-text-primary tabular-nums">
-            {row.qrCodes}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'nfcTags',
-      label: 'NFC Tags',
-      header: 'NFC Tags',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
-          <span className="text-sm text-text-primary tabular-nums">
-            {row.nfcTags}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'totalScans',
-      label: 'Total Scans',
-      header: 'Total Scans',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
-          <span className="text-sm text-text-primary tabular-nums">
-            {row.totalScans.toLocaleString()}
-          </span>
-        )
-      },
+      render: (_, row) => <StatusText status={row.status} />,
     },
     {
       key: 'dateAdded',
-      label: 'Date Added',
-      header: 'Date Added',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
-          <span className="text-sm text-text-secondary">
-            {formatDate(row.dateAdded)}
-          </span>
-        )
-      },
+      label: 'Created',
+      render: (_, row) => (
+        <span className="text-sm text-text-secondary">
+          {formatDate(row.dateAdded)}
+        </span>
+      ),
     },
     {
       key: 'actions',
       label: 'Actions',
-      header: 'Actions',
-      render: (arg1, arg2) => {
-        const row = getRow(arg1, arg2)
-        return (
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            aria-label={`Actions for ${row.name}`}
-            className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface transition-colors duration-150"
+            onClick={(e) => handleOpenEdit(e, row)}
+            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-primary hover:bg-surface transition-colors duration-150 cursor-pointer"
           >
-            <MoreHorizontal className="w-4 h-4" />
+            Edit
           </button>
-        )
-      },
+          <button
+            type="button"
+            onClick={(e) => handleToggleStatus(e, row.id)}
+            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-secondary hover:text-text-primary hover:bg-surface transition-colors duration-150 cursor-pointer"
+          >
+            {row.status === 'active' ? 'Pause' : 'Activate'}
+          </button>
+        </div>
+      ),
     },
   ]
 
@@ -171,13 +215,9 @@ export default function BusinessesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Businesses"
-        description="Manage registered businesses"
-        breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Businesses' }]}
+        description="Manage business profiles, questionnaires, and generated QR codes"
         actions={
-          <Button
-            variant="primary"
-            onClick={() => setIsPanelOpen((prev) => !prev)}
-          >
+          <Button variant="primary" onClick={handleOpenAdd}>
             <Plus className="w-4 h-4" />
             Add Business
           </Button>
@@ -187,7 +227,7 @@ export default function BusinessesPage() {
       <SlideDownPanel
         isOpen={isPanelOpen}
         onClose={handleClosePanel}
-        title="Add New Business"
+        title={editingId ? 'Edit Business' : 'Add New Business'}
       >
         <form onSubmit={handleSave}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -197,12 +237,13 @@ export default function BusinessesPage() {
               placeholder="e.g. Chai Junction"
               value={formData.name}
               onChange={handleFieldChange('name')}
+              required
             />
 
             <div>
               <label
                 htmlFor="business-category"
-                className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-1.5"
+                className="block text-sm font-medium text-text-primary mb-1.5"
               >
                 Category
               </label>
@@ -221,41 +262,18 @@ export default function BusinessesPage() {
               </select>
             </div>
 
-            <div>
-              <label
-                htmlFor="business-city"
-                className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-1.5"
-              >
-                City
-              </label>
-              <select
-                id="business-city"
-                name="city"
-                value={formData.city}
-                onChange={handleFieldChange('city')}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text-primary focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors duration-150"
-              >
-                {indianCities.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <Input
-              label="Google Maps URL"
-              name="googleMapsUrl"
-              type="url"
-              placeholder="https://maps.google.com/..."
-              value={formData.googleMapsUrl}
-              onChange={handleFieldChange('googleMapsUrl')}
+              label="Location (Optional)"
+              name="location"
+              placeholder="e.g. Bandra West, Mumbai"
+              value={formData.location}
+              onChange={handleFieldChange('location')}
             />
 
             <div>
               <label
                 htmlFor="business-status"
-                className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-1.5"
+                className="block text-sm font-medium text-text-primary mb-1.5"
               >
                 Status
               </label>
@@ -267,12 +285,60 @@ export default function BusinessesPage() {
                 className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text-primary focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors duration-150"
               >
                 <option value="active">Active</option>
-                <option value="pending">Pending</option>
+                <option value="paused">Paused</option>
               </select>
             </div>
+
+            <Input
+              label="Phone Number"
+              name="phone"
+              placeholder="+91 98201 44510"
+              value={formData.phone}
+              onChange={handleFieldChange('phone')}
+            />
+
+            <Input
+              label="Contact Email"
+              name="email"
+              type="email"
+              placeholder="hello@business.in"
+              value={formData.email}
+              onChange={handleFieldChange('email')}
+            />
+
+            <Input
+              label="Address (Optional)"
+              name="address"
+              placeholder="Shop 4, Carter Road, Bandra West"
+              value={formData.address}
+              onChange={handleFieldChange('address')}
+            />
+
+            {!editingId && (
+              <Input
+                label="Google Review URL"
+                name="googleReviewUrl"
+                type="url"
+                placeholder="https://g.page/r/..."
+                value={formData.googleReviewUrl}
+                onChange={handleFieldChange('googleReviewUrl')}
+              />
+            )}
+
+            {!editingId && (
+              <div className="md:col-span-2">
+                <Input
+                  label="Welcome Message (Optional)"
+                  name="welcomeMessage"
+                  placeholder="Thanks for visiting! Answer a few quick questions to draft your review."
+                  value={formData.welcomeMessage}
+                  onChange={handleFieldChange('welcomeMessage')}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="flex justify-end gap-3 mt-4">
+          <div className="flex justify-end gap-3 mt-5">
             <Button
               type="button"
               variant="secondary"
@@ -281,23 +347,57 @@ export default function BusinessesPage() {
               Cancel
             </Button>
             <Button type="submit" variant="primary">
-              Save Business
+              {editingId ? 'Save Changes' : 'Save Business'}
             </Button>
           </div>
         </form>
       </SlideDownPanel>
 
+      {/* Filter bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div
+          role="group"
+          aria-label="Status filter"
+          className="inline-flex items-center rounded-md border border-border bg-card p-0.5 self-start"
+        >
+          {[
+            { id: 'all', label: `All (${businesses.length})` },
+            {
+              id: 'active',
+              label: `Active (${businesses.filter((b) => b.status === 'active').length})`,
+            },
+            {
+              id: 'paused',
+              label: `Paused (${businesses.filter((b) => b.status === 'paused').length})`,
+            },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setStatusFilter(tab.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${
+                statusFilter === tab.id
+                  ? 'bg-surface text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <DataTable
         columns={columns}
         data={filteredBusinesses}
         searchable
-        searchPlaceholder="Search businesses by name, category, or city..."
+        searchPlaceholder="Search businesses by name, category, location, or contact..."
         searchValue={search}
         onSearchChange={setSearch}
-        searchKeys={['name', 'category', 'city']}
         pagination
-        emptyTitle="No businesses yet"
-        emptyDescription="Add your first business to get started"
+        onRowClick={(row) => navigate(`/businesses/${row.id}`)}
+        emptyTitle="No businesses found"
+        emptyDescription="Try adjusting your search or add a new business to get started."
         emptyIcon={Building2}
       />
     </div>

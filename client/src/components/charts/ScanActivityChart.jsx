@@ -18,7 +18,7 @@ function ScanTooltip({ active, payload, label }) {
   return (
     <div className="bg-white border border-border rounded-md shadow-md p-3">
       <p className="text-xs text-text-tertiary">{label}</p>
-      <p className="text-sm font-semibold text-text-primary mt-0.5">
+      <p className="text-sm font-semibold text-text-primary mt-0.5 tabular-nums">
         {Number(value).toLocaleString()} scans
       </p>
     </div>
@@ -28,14 +28,14 @@ function ScanTooltip({ active, payload, label }) {
 export default function ScanActivityChart({ data = [] }) {
   if (!Array.isArray(data) || data.length === 0) {
     return (
-      <div className="h-[280px] flex items-center justify-center text-sm text-text-tertiary">
+      <div className="h-[260px] flex items-center justify-center text-sm text-text-tertiary">
         No scan activity data available
       </div>
     )
   }
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid
           strokeDasharray="3 3"
@@ -43,7 +43,7 @@ export default function ScanActivityChart({ data = [] }) {
           vertical={false}
         />
         <XAxis
-          dataKey="month"
+          dataKey="label"
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 12, fill: '#9CA3AF' }}
@@ -52,7 +52,7 @@ export default function ScanActivityChart({ data = [] }) {
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 12, fill: '#9CA3AF' }}
-          width={40}
+          width={42}
         />
         <Tooltip
           content={<ScanTooltip />}
@@ -60,7 +60,7 @@ export default function ScanActivityChart({ data = [] }) {
         />
         <Area
           type="monotone"
-          dataKey="scans"
+          dataKey="total"
           stroke="#1B6B4A"
           fill="#E8F5EE"
           strokeWidth={2}

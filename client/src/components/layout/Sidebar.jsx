@@ -3,9 +3,6 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Building2,
-  QrCode,
-  Wifi,
-  BarChart3,
   Settings,
   LogOut,
   ChevronLeft,
@@ -15,11 +12,8 @@ import {
 import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
-  { label: 'Overview', path: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Businesses', path: '/businesses', icon: Building2 },
-  { label: 'QR Codes', path: '/qr-codes', icon: QrCode },
-  { label: 'NFC Tags', path: '/nfc-tags', icon: Wifi },
-  { label: 'Analytics', path: '/analytics', icon: BarChart3 },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]
 
@@ -41,9 +35,6 @@ export default function Sidebar({ collapsed, onToggle }) {
   }, [])
 
   const isActivePath = (path) => {
-    if (path === '/') {
-      return location.pathname === '/'
-    }
     return (
       location.pathname === path || location.pathname.startsWith(`${path}/`)
     )
@@ -55,7 +46,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   return (
     <aside
-      className={`hidden md:flex md:flex-col bg-sidebar fixed left-0 top-0 h-screen z-30 transition-all duration-200 ease-in-out ${
+      className={`hidden md:flex md:flex-col bg-sidebar fixed left-0 top-0 h-screen z-30 border-r border-sidebar-border transition-all duration-200 ease-in-out ${
         collapsed ? 'w-16' : 'w-[240px]'
       }`}
     >
@@ -63,7 +54,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         type="button"
         onClick={onToggle}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="absolute -right-3 top-7 w-6 h-6 rounded-full bg-card border border-border shadow-sm flex items-center justify-center cursor-pointer hover:bg-surface transition-colors duration-150 text-text-secondary"
+        className="absolute -right-3 top-5 w-6 h-6 rounded-full bg-card border border-border shadow-xs flex items-center justify-center cursor-pointer hover:bg-surface transition-colors duration-150 text-text-secondary"
       >
         {collapsed ? (
           <ChevronRight className="w-3 h-3" />
@@ -72,15 +63,22 @@ export default function Sidebar({ collapsed, onToggle }) {
         )}
       </button>
 
+      {/* Brand header aligned with h-16 TopNavbar */}
       <div
-        className={`text-lg font-bold text-white tracking-tight ${
-          collapsed ? 'py-5 text-center' : 'px-5 py-5'
+        className={`h-16 flex items-center border-b border-sidebar-border shrink-0 ${
+          collapsed ? 'justify-center px-2' : 'px-5'
         }`}
       >
-        {collapsed ? 'R' : 'ReviewBuddy'}
+        <Link
+          to="/dashboard"
+          className="text-[17px] font-bold text-white tracking-tight hover:opacity-90 transition-opacity"
+        >
+          {collapsed ? 'R' : 'ReviewBuddy'}
+        </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2 px-3 space-y-1">
+      {/* Primary navigation — 3 focused items */}
+      <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const active = isActivePath(item.path)
@@ -90,7 +88,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               key={item.path}
               to={item.path}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors duration-150 ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${
                 collapsed ? 'justify-center' : ''
               } ${
                 active
@@ -105,9 +103,10 @@ export default function Sidebar({ collapsed, onToggle }) {
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border mx-3 my-2" />
+      <div className="border-t border-sidebar-border mx-3" />
 
-      <div className="px-3 pb-4">
+      {/* Admin profile & logout */}
+      <div className="p-3">
         <div className="relative" ref={menuRef}>
           {menuOpen && (
             <div className="absolute bottom-full left-0 w-full min-w-[180px] mb-2 bg-card rounded-lg border border-border shadow-md py-1 z-50">
@@ -117,15 +116,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                 className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface cursor-pointer transition-colors duration-150"
               >
                 <User className="w-4 h-4 text-text-secondary" />
-                <span>Profile</span>
-              </Link>
-              <Link
-                to="/settings"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface cursor-pointer transition-colors duration-150"
-              >
-                <Settings className="w-4 h-4 text-text-secondary" />
-                <span>Settings</span>
+                <span>Account Settings</span>
               </Link>
               <div className="border-t border-border my-1" />
               <button
@@ -137,7 +128,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-surface cursor-pointer transition-colors duration-150"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span>Sign out</span>
               </button>
             </div>
           )}
@@ -145,11 +136,11 @@ export default function Sidebar({ collapsed, onToggle }) {
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            className={`w-full flex items-center gap-3 py-2.5 rounded-md text-sidebar-text hover:bg-sidebar-hover cursor-pointer transition-colors duration-150 ${
-              collapsed ? 'justify-center px-0' : 'px-3'
+            className={`w-full flex items-center gap-3 py-2 rounded-md text-sidebar-text hover:bg-sidebar-hover cursor-pointer transition-colors duration-150 ${
+              collapsed ? 'justify-center px-0' : 'px-2.5'
             }`}
           >
-            <div className="w-8 h-8 rounded-full bg-sidebar-active flex items-center justify-center text-xs font-medium text-sidebar-text-active flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-sidebar-active border border-sidebar-border flex items-center justify-center text-xs font-medium text-sidebar-text-active flex-shrink-0">
               {userInitial}
             </div>
             {!collapsed && (
