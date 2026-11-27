@@ -4,20 +4,25 @@ import PublicReviewExperience from '../public/PublicReviewExperience'
 import {
   appearanceAccentPresets,
   appearanceFonts,
-} from '../../data/mockData'
+} from '../../utils/businessOptions'
 import { getFontStack, loadGoogleFontsBatch } from '../../utils/fontLoader'
 
-export default function LandingPageAppearanceTab({ business, onSave }) {
-  const [appearance, setAppearance] = useState({
+function buildAppearance(business) {
+  return {
     accentColor: business.appearance?.accentColor || '#1B6B4A',
     fontFamily: business.appearance?.fontFamily || 'Inter',
     businessNameAlignment:
       business.appearance?.businessNameAlignment || 'left',
     logoPlacement: business.appearance?.logoPlacement || 'beside',
     layoutStyle: business.appearance?.layoutStyle || 'centered',
-  })
+  }
+}
+
+export default function LandingPageAppearanceTab({ business, onSave }) {
+  const [appearance, setAppearance] = useState(() => buildAppearance(business))
   const [saving, setSaving] = useState(false)
   const [savedNotice, setSavedNotice] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     // Load the 10 font choices on demand for the visual font selector
@@ -26,12 +31,16 @@ export default function LandingPageAppearanceTab({ business, onSave }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (saving) return
     setSaving(true)
     setSavedNotice(false)
+    setSaveError('')
     try {
       await onSave(appearance)
       setSavedNotice(true)
       setTimeout(() => setSavedNotice(false), 2500)
+    } catch (err) {
+      setSaveError(err.message || 'Could not save appearance settings.')
     } finally {
       setSaving(false)
     }
@@ -256,6 +265,15 @@ export default function LandingPageAppearanceTab({ business, onSave }) {
               ))}
             </div>
           </div>
+
+          {saveError && (
+            <div
+              role="alert"
+              className="bg-error-light border border-error-border rounded-md px-3 py-2 text-xs text-error"
+            >
+              {saveError}
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-border flex items-center justify-between">

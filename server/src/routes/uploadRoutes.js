@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/requireAuth.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 import { requireCsrf } from '../middleware/csrfProtection.js'
 import { uploadLogoMiddleware } from '../middleware/uploadMiddleware.js'
-import { uploadLogo } from '../controllers/uploadController.js'
+import { cleanupTempLogo, uploadLogo } from '../controllers/uploadController.js'
 
 export function createUploadRouter() {
   const router = Router()
@@ -25,6 +25,14 @@ export function createUploadRouter() {
     uploadLimiter,
     uploadLogoMiddleware,
     uploadLogo,
+  )
+
+  router.delete(
+    '/logo',
+    requireAuth,
+    requireAdmin,
+    requireCsrf,
+    cleanupTempLogo,
   )
 
   return router

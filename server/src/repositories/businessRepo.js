@@ -12,6 +12,11 @@ import { buildQrPublicUrl } from '../config/seedData.js'
 import { sanitizeText } from '../services/reviewGenerator.js'
 import { deleteImageAsset } from '../services/imageStorageService.js'
 import {
+  deleteEventsForBusiness,
+  recordAnalyticsEvent,
+  recordAnalyticsEventsBatch,
+} from './analyticsRepo.js'
+import {
   ALLOWED_QUESTION_CATEGORIES,
   classifyQuestion,
 } from '../services/reviewGeneration/questionClassifier.js'
@@ -22,6 +27,26 @@ const EMPTY_LOGO = {
   format: '',
   width: 0,
   height: 0,
+}
+
+export async function isLogoAssetReferenced(
+  publicId,
+  excludeBusinessPublicId = '',
+) {
+  if (!publicId || typeof publicId !== 'string') return false
+  if (usingMongo()) {
+    const query = { 'logo.publicId': publicId }
+    if (excludeBusinessPublicId) {
+      query.publicId = { $ne: excludeBusinessPublicId }
+    }
+    return Boolean(await Business.exists(query))
+  }
+  const items = readLocalStore()
+  return items.some(
+    (b) =>
+      b.logo?.publicId === publicId &&
+      (!excludeBusinessPublicId || b.publicId !== excludeBusinessPublicId),
+  )
 }
 
 export function normalizeLogo(input) {
@@ -106,6 +131,24 @@ export function normalizeAppearance(input = {}, existing = {}) {
   }
 }
 
+export function normalizeGoogleReviewUrl(raw) {
+  const clean = sanitizeText(String(raw || ''), 4096)
+  if (!clean) return ''
+  // Auto-convert raw Google Place IDs (e.g. ChIJCcAieFGl1jsREQ6h9oXJa-8) into direct review popup links
+  if (/^(?:ChIJ|GhIJ|Eh)[A-Za-z0-9_-]{10,}$/.test(clean)) {
+    return `https://search.google.com/local/writereview?placeid=${clean}`
+  }
+  try {
+    const parsed = new URL(clean)
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return clean
+    }
+  } catch {
+    // Reject non-URL / unsafe schemes (e.g. javascript:, data:)
+  }
+  return ''
+}
+
 export function normalizeReviewConfig(input = {}, existing = {}, name = '') {
   const merged = {
     googleReviewUrl: '',
@@ -118,7 +161,7 @@ export function normalizeReviewConfig(input = {}, existing = {}, name = '') {
   }
 
   return {
-    googleReviewUrl: sanitizeText(merged.googleReviewUrl, 500),
+    googleReviewUrl: normalizeGoogleReviewUrl(merged.googleReviewUrl),
     welcomeMessage: sanitizeText(merged.welcomeMessage, 400),
     tone: ALLOWED_TONES.includes(merged.tone)
       ? merged.tone
@@ -142,8 +185,8 @@ export function normalizeQuestions(questions = []) {
         type === 'short_text'
           ? []
           : (Array.isArray(q.options) ? q.options : [])
-              .map((o) => sanitizeText(String(o), 120))
-              .filter(Boolean)
+            .map((o) => sanitizeText(String(o), 120))
+            .filter(Boolean)
       const cleanText = sanitizeText(q.text, 240)
       const category = ALLOWED_QUESTION_CATEGORIES.includes(q.category)
         ? q.category
@@ -169,10 +212,10 @@ export function toPublicBusinessPayload(biz) {
   const publicLogoUrl = biz.logo?.url || ''
   const publicLogo = publicLogoUrl
     ? {
-        url: publicLogoUrl,
-        width: biz.logo?.width || 0,
-        height: biz.logo?.height || 0,
-      }
+      url: publicLogoUrl,
+      width: biz.logo?.width || 0,
+      height: biz.logo?.height || 0,
+    }
     : null
 
   if (biz.status === 'paused') {
@@ -212,18 +255,27 @@ function serializeBusiness(doc) {
   if (!doc) return null
   const obj = typeof doc.toObject === 'function' ? doc.toObject() : doc
   const logo = obj.logo?.url ? obj.logo : { ...EMPTY_LOGO }
+  const rawCreated =
+    obj.createdAt instanceof Date
+      ? obj.createdAt.toISOString()
+      : String(obj.createdAt || new Date().toISOString())
   return {
     ...obj,
     id: obj.publicId,
+    qrPublicUrl: buildQrPublicUrl(obj.publicId),
     logo,
     logoUrl: logo.url || '',
-    dateAdded: (obj.createdAt || new Date().toISOString()).slice(0, 10),
+    dateAdded: rawCreated.slice(0, 10),
   }
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export async function listBusinesses() {
   if (usingMongo()) {
-    const docs = await Business.find().sort({ createdAt: -1 })
+    const docs = await Business.find().sort({ createdAt: -1 }).lean()
     return docs.map(serializeBusiness)
   }
   const items = readLocalStore()
@@ -232,11 +284,126 @@ export async function listBusinesses() {
     .map(serializeBusiness)
 }
 
+export async function listBusinessesPaginated({
+  page = 1,
+  limit = 20,
+  search = '',
+  status = 'all',
+} = {}) {
+  const safePage = Math.max(1, Number(page) || 1)
+  const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20))
+  const cleanSearch = String(search || '').trim().slice(0, 100)
+  const cleanStatus = ['active', 'paused'].includes(status) ? status : 'all'
+
+  if (usingMongo()) {
+    const filter = {}
+    if (cleanStatus !== 'all') {
+      filter.status = cleanStatus
+    }
+    if (cleanSearch) {
+      const re = new RegExp(escapeRegex(cleanSearch), 'i')
+      filter.$or = [
+        { name: re },
+        { category: re },
+        { location: re },
+        { email: re },
+        { phone: re },
+      ]
+    }
+
+    const skip = (safePage - 1) * safeLimit
+    const [docs, total, statusCounts] = await Promise.all([
+      Business.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
+      Business.countDocuments(filter),
+      Business.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+    ])
+
+    const counts = { all: 0, active: 0, paused: 0 }
+    for (const row of statusCounts) {
+      if (row._id === 'active') counts.active = row.count
+      else if (row._id === 'paused') counts.paused = row.count
+      counts.all += row.count
+    }
+
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit))
+    return {
+      businesses: docs.map(serializeBusiness),
+      pagination: {
+        total,
+        totalItems: total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages,
+        hasNextPage: safePage < totalPages,
+        hasPrevPage: safePage > 1,
+      },
+      counts,
+    }
+  }
+
+  const allItems = readLocalStore().sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+  )
+  const counts = {
+    all: allItems.length,
+    active: allItems.filter((b) => b.status === 'active').length,
+    paused: allItems.filter((b) => b.status === 'paused').length,
+  }
+
+  const q = cleanSearch.toLowerCase()
+  const filtered = allItems.filter((b) => {
+    if (cleanStatus !== 'all' && b.status !== cleanStatus) return false
+    if (!q) return true
+    return (
+      (b.name || '').toLowerCase().includes(q) ||
+      (b.category || '').toLowerCase().includes(q) ||
+      (b.location || '').toLowerCase().includes(q) ||
+      (b.email || '').toLowerCase().includes(q) ||
+      (b.phone || '').toLowerCase().includes(q)
+    )
+  })
+
+  const total = filtered.length
+  const skip = (safePage - 1) * safeLimit
+  const paged = filtered.slice(skip, skip + safeLimit).map(serializeBusiness)
+
+  const totalPages = Math.max(1, Math.ceil(total / safeLimit))
+  return {
+    businesses: paged,
+    pagination: {
+      total,
+      totalItems: total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages,
+      hasNextPage: safePage < totalPages,
+      hasPrevPage: safePage > 1,
+    },
+    counts,
+  }
+}
+
+export async function isLogoReferencedByAnyBusiness(publicId) {
+  if (!publicId) return false
+  if (usingMongo()) {
+    const exists = await Business.exists({ 'logo.publicId': publicId })
+    return Boolean(exists)
+  }
+  const items = readLocalStore()
+  return items.some((b) => b.logo?.publicId === publicId)
+}
+
 export async function findBusinessByAnyId(idOrPublicId) {
   if (usingMongo()) {
     const doc = await Business.findOne({
       $or: [{ publicId: idOrPublicId }, { slug: idOrPublicId }],
-    })
+    }).lean()
     return serializeBusiness(doc)
   }
   const items = readLocalStore()
@@ -244,6 +411,22 @@ export async function findBusinessByAnyId(idOrPublicId) {
     (b) => b.publicId === idOrPublicId || b.slug === idOrPublicId,
   )
   return serializeBusiness(found)
+}
+
+export async function findPublicBusinessById(idOrPublicId) {
+  if (usingMongo()) {
+    return Business.findOne({
+      $or: [{ publicId: idOrPublicId }, { slug: idOrPublicId }],
+    })
+      .select('publicId name logoText logo category location status reviewConfig appearance questions')
+      .lean()
+  }
+  const items = readLocalStore()
+  return (
+    items.find(
+      (b) => b.publicId === idOrPublicId || b.slug === idOrPublicId,
+    ) || null
+  )
 }
 
 export async function createBusinessRecord(payload) {
@@ -361,7 +544,10 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
 
     // Notice: publicId and qrPublicUrl are immutable and NEVER overwritten
     await existing.save()
-    if (oldPublicIdToDelete) {
+    if (
+      oldPublicIdToDelete &&
+      !(await isLogoAssetReferenced(oldPublicIdToDelete, existing.publicId))
+    ) {
       await deleteImageAsset(oldPublicIdToDelete)
     }
     return serializeBusiness(existing)
@@ -424,10 +610,10 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
     reviewConfig:
       updates.reviewConfig !== undefined
         ? normalizeReviewConfig(
-            updates.reviewConfig,
-            current.reviewConfig,
-            nextName,
-          )
+          updates.reviewConfig,
+          current.reviewConfig,
+          nextName,
+        )
         : current.reviewConfig,
     appearance:
       updates.appearance !== undefined
@@ -445,10 +631,46 @@ export async function updateBusinessRecord(idOrPublicId, updates) {
 
   items[idx] = updated
   writeLocalStore(items)
-  if (oldPublicIdToDelete) {
+  if (
+    oldPublicIdToDelete &&
+    !(await isLogoAssetReferenced(oldPublicIdToDelete, updated.publicId))
+  ) {
     await deleteImageAsset(oldPublicIdToDelete)
   }
   return serializeBusiness(updated)
+}
+
+export async function deleteBusinessRecord(idOrPublicId) {
+  if (usingMongo()) {
+    const existing = await Business.findOne({
+      $or: [{ publicId: idOrPublicId }, { slug: idOrPublicId }],
+    })
+    if (!existing) return null
+    const publicId = existing.publicId
+    const logoPublicId = existing.logo?.publicId || ''
+    await Business.deleteOne({ _id: existing._id })
+    await deleteEventsForBusiness(publicId)
+    if (logoPublicId && !(await isLogoAssetReferenced(logoPublicId))) {
+      await deleteImageAsset(logoPublicId)
+    }
+    return { deleted: true, publicId }
+  }
+
+  const items = readLocalStore()
+  const idx = items.findIndex(
+    (b) => b.publicId === idOrPublicId || b.slug === idOrPublicId,
+  )
+  if (idx === -1) return null
+  const [removed] = items.splice(idx, 1)
+  writeLocalStore(items)
+  await deleteEventsForBusiness(removed.publicId)
+  if (
+    removed.logo?.publicId &&
+    !(await isLogoAssetReferenced(removed.logo.publicId))
+  ) {
+    await deleteImageAsset(removed.logo.publicId)
+  }
+  return { deleted: true, publicId: removed.publicId }
 }
 
 const ALLOWED_EVENTS = new Set([
@@ -481,6 +703,13 @@ export async function incrementAnalyticsEvent(publicId, eventName, meta = {}) {
         },
         { new: true },
       )
+      if (doc) {
+        await recordAnalyticsEvent({
+          businessPublicId: doc.publicId,
+          eventType: eventName,
+          rating,
+        })
+      }
       return serializeBusiness(doc)
     }
 
@@ -503,6 +732,11 @@ export async function incrementAnalyticsEvent(publicId, eventName, meta = {}) {
       (current.analytics.ratingDistribution[rating] || 0) + 1
     current.updatedAt = new Date().toISOString()
     writeLocalStore(items)
+    await recordAnalyticsEvent({
+      businessPublicId: current.publicId,
+      eventType: eventName,
+      rating,
+    })
     return serializeBusiness(current)
   }
 
@@ -512,6 +746,12 @@ export async function incrementAnalyticsEvent(publicId, eventName, meta = {}) {
       { $inc: { [`analytics.${eventName}`]: 1 } },
       { new: true },
     )
+    if (doc) {
+      await recordAnalyticsEvent({
+        businessPublicId: doc.publicId,
+        eventType: eventName,
+      })
+    }
     return serializeBusiness(doc)
   }
 
@@ -527,5 +767,58 @@ export async function incrementAnalyticsEvent(publicId, eventName, meta = {}) {
   current.analytics[eventName] = (current.analytics[eventName] || 0) + 1
   current.updatedAt = new Date().toISOString()
   writeLocalStore(items)
+  await recordAnalyticsEvent({
+    businessPublicId: current.publicId,
+    eventType: eventName,
+  })
   return serializeBusiness(current)
+}
+
+export async function recordSubmissionAnalytics(
+  publicId,
+  { isRegenerate = false } = {},
+) {
+  const incFields = isRegenerate
+    ? { 'analytics.reviewDraftsGenerated': 1 }
+    : {
+      'analytics.questionnaireCompletions': 1,
+      'analytics.reviewDraftsGenerated': 1,
+    }
+
+  const events = isRegenerate
+    ? [{ businessPublicId: publicId, eventType: 'reviewDraftsGenerated' }]
+    : [
+      { businessPublicId: publicId, eventType: 'questionnaireCompletions' },
+      { businessPublicId: publicId, eventType: 'reviewDraftsGenerated' },
+    ]
+
+  if (usingMongo()) {
+    await Promise.all([
+      Business.updateOne(
+        { publicId, status: 'active' },
+        { $inc: incFields },
+      ),
+      recordAnalyticsEventsBatch(events),
+    ])
+    return true
+  }
+
+  const items = readLocalStore()
+  const idx = items.findIndex(
+    (b) => b.publicId === publicId && b.status === 'active',
+  )
+  if (idx === -1) return false
+
+  const current = items[idx]
+  current.analytics = current.analytics || {}
+  if (!isRegenerate) {
+    current.analytics.questionnaireCompletions =
+      (current.analytics.questionnaireCompletions || 0) + 1
+  }
+  current.analytics.reviewDraftsGenerated =
+    (current.analytics.reviewDraftsGenerated || 0) + 1
+  current.updatedAt = new Date().toISOString()
+  writeLocalStore(items)
+  await recordAnalyticsEventsBatch(events)
+  return true
 }

@@ -21,6 +21,10 @@ const adminSchema = new mongoose.Schema(
       enum: ['Administrator'],
       default: 'Administrator',
     },
+    emailNotifications: {
+      type: Boolean,
+      default: true,
+    },
     passwordHash: {
       type: String,
       required: true,

@@ -143,5 +143,10 @@ const businessSchema = new mongoose.Schema(
   { timestamps: true },
 )
 
+businessSchema.index({ slug: 1 })
+businessSchema.index({ status: 1, createdAt: -1 })
+businessSchema.index({ createdAt: -1 })
+businessSchema.index({ 'logo.publicId': 1 }, { sparse: true })
+
 const Business = mongoose.model('Business', businessSchema)
 export default Business

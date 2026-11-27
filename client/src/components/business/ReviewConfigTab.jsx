@@ -1,23 +1,45 @@
 import { useState } from 'react'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
-import { reviewTones, reviewLengths } from '../../data/mockData'
+import { reviewTones, reviewLengths } from '../../utils/businessOptions'
+import { normalizeGoogleReviewInput } from '../../utils/googleReview'
 
-export default function ReviewConfigTab({ business, onSave }) {
-  const [config, setConfig] = useState({
+function buildConfig(business) {
+  return {
     googleReviewUrl: business.reviewConfig?.googleReviewUrl || '',
     welcomeMessage: business.reviewConfig?.welcomeMessage || '',
     tone: business.reviewConfig?.tone || 'Natural and Conversational',
     length: business.reviewConfig?.length || 'Medium',
     autoCopyPrompt: business.reviewConfig?.autoCopyPrompt ?? true,
-  })
-  const [savedNotice, setSavedNotice] = useState(false)
+  }
+}
 
-  const handleSubmit = (e) => {
+export default function ReviewConfigTab({ business, onSave }) {
+  const [config, setConfig] = useState(() => buildConfig(business))
+  const [saving, setSaving] = useState(false)
+  const [savedNotice, setSavedNotice] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    onSave(config)
-    setSavedNotice(true)
-    setTimeout(() => setSavedNotice(false), 2500)
+    if (saving) return
+
+    const normalizedUrl = normalizeGoogleReviewInput(config.googleReviewUrl)
+    const nextConfig = { ...config, googleReviewUrl: normalizedUrl }
+    setConfig(nextConfig)
+    setSaving(true)
+    setSavedNotice(false)
+    setSaveError('')
+
+    try {
+      await onSave(nextConfig)
+      setSavedNotice(true)
+      setTimeout(() => setSavedNotice(false), 2500)
+    } catch (err) {
+      setSaveError(err.message || 'Could not save review configuration.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -36,15 +58,27 @@ export default function ReviewConfigTab({ business, onSave }) {
       </div>
 
       <div className="p-6 space-y-5">
-        <Input
-          label="Google Review URL"
-          type="url"
-          placeholder="https://g.page/r/..."
-          value={config.googleReviewUrl}
-          onChange={(e) =>
-            setConfig((prev) => ({ ...prev, googleReviewUrl: e.target.value }))
-          }
-        />
+        <div>
+          <Input
+            label="Google Place ID"
+            type="text"
+            placeholder="ChIJCcAieFGl1jsREQ6h9oXJa-8"
+            value={config.googleReviewUrl}
+            onChange={(e) =>
+              setConfig((prev) => ({ ...prev, googleReviewUrl: e.target.value }))
+            }
+            onBlur={(e) => {
+              const normalized = normalizeGoogleReviewInput(e.target.value)
+              if (normalized !== e.target.value) {
+                setConfig((prev) => ({ ...prev, googleReviewUrl: normalized }))
+              }
+            }}
+          />
+          <p className="text-xs text-text-tertiary mt-1.5">
+            Paste a Google Place ID (e.g. <code>ChIJ...</code>) to open the direct
+            review popup, or paste a full Google Review URL.
+          </p>
+        </div>
 
         <div>
           <label
@@ -137,13 +171,22 @@ export default function ReviewConfigTab({ business, onSave }) {
             />
           </label>
         </div>
+
+        {saveError && (
+          <div
+            role="alert"
+            className="bg-error-light border border-error-border rounded-md px-3 py-2 text-xs text-error"
+          >
+            {saveError}
+          </div>
+        )}
       </div>
 
       <div className="px-6 py-4 border-t border-border flex items-center justify-between">
         <span className="text-xs text-status-active font-medium">
           {savedNotice ? 'Configuration saved' : ''}
         </span>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" loading={saving}>
           Save Configuration
         </Button>
       </div>

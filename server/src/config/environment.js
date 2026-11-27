@@ -3,6 +3,8 @@
  * Fails safely in production if critical secrets or database configuration are missing.
  */
 
+const VALID_SAME_SITE = new Set(['lax', 'strict', 'none'])
+
 export function getEnvConfig() {
   const nodeEnv = process.env.NODE_ENV || 'development'
   const isProd = nodeEnv === 'production'
@@ -20,6 +22,29 @@ export function getEnvConfig() {
     .map((o) => o.trim().replace(/\/+$/, ''))
     .filter(Boolean)
 
+  const rawSameSite = (process.env.COOKIE_SAME_SITE || 'lax').trim().toLowerCase()
+  const cookieSameSite = VALID_SAME_SITE.has(rawSameSite) ? rawSameSite : 'lax'
+
+  const rawSecure = (process.env.COOKIE_SECURE || '').trim().toLowerCase()
+  const cookieSecure =
+    rawSecure === 'true'
+      ? true
+      : rawSecure === 'false'
+        ? false
+        : isProd || cookieSameSite === 'none'
+
+  const rawTrustProxy = Number(process.env.TRUST_PROXY)
+  const trustProxy =
+    Number.isInteger(rawTrustProxy) && rawTrustProxy >= 0 && rawTrustProxy <= 5
+      ? rawTrustProxy
+      : isProd
+        ? 1
+        : 0
+
+  const rawPool = Number(process.env.MONGO_MAX_POOL_SIZE)
+  const mongoMaxPoolSize =
+    Number.isInteger(rawPool) && rawPool >= 2 && rawPool <= 25 ? rawPool : 10
+
   if (isProd) {
     if (!mongoUri) {
       throw new Error('FATAL: MONGODB_URI is required in production.')
@@ -32,6 +57,11 @@ export function getEnvConfig() {
     if (rawOrigins.includes('*')) {
       throw new Error(
         'FATAL: Wildcard CORS origin (*) is forbidden with credentialed sessions.',
+      )
+    }
+    if (cookieSameSite === 'none' && !cookieSecure) {
+      throw new Error(
+        'FATAL: COOKIE_SECURE=true is required when COOKIE_SAME_SITE=none.',
       )
     }
   }
@@ -51,5 +81,9 @@ export function getEnvConfig() {
     sessionMaxLifetimeMs:
       Number(process.env.SESSION_MAX_LIFETIME_MS) || 12 * 60 * 60 * 1000, // 12h
     cookieDomain: (process.env.COOKIE_DOMAIN || '').trim() || undefined,
+    cookieSameSite,
+    cookieSecure,
+    trustProxy,
+    mongoMaxPoolSize,
   }
 }

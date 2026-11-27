@@ -16,31 +16,66 @@ export default function DataTable({
   emptyTitle = 'No data found',
   emptyDescription = 'There are no records to display.',
   pagination = true,
+  serverPagination = null,
+  onPageChange,
+  onRowsPerPageChange,
   onRowClick,
 }) {
-  const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [localPage, setLocalPage] = useState(1)
+  const [localRowsPerPage, setLocalRowsPerPage] = useState(10)
 
   const safeData = Array.isArray(data) ? data : []
-  const totalItems = safeData.length
-  const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage))
-  const safePage = Math.min(currentPage, totalPages)
+  const isServerPaged = Boolean(serverPagination)
+
+  const rowsPerPage = isServerPaged
+    ? serverPagination.limit || 10
+    : localRowsPerPage
+  const totalItems = isServerPaged
+    ? serverPagination.totalItems ?? serverPagination.total ?? safeData.length
+    : safeData.length
+  const totalPages = isServerPaged
+    ? Math.max(1, serverPagination.totalPages || 1)
+    : Math.max(1, Math.ceil(totalItems / rowsPerPage))
+  const safePage = isServerPaged
+    ? Math.min(Math.max(1, serverPagination.page || 1), totalPages)
+    : Math.min(localPage, totalPages)
 
   const startIndex = pagination ? (safePage - 1) * rowsPerPage : 0
-  const endIndex = pagination
-    ? Math.min(startIndex + rowsPerPage, totalItems)
-    : totalItems
-  const displayedData = pagination
-    ? safeData.slice(startIndex, endIndex)
-    : safeData
+  const endIndex = isServerPaged
+    ? Math.min(startIndex + safeData.length, totalItems)
+    : pagination
+      ? Math.min(startIndex + rowsPerPage, totalItems)
+      : totalItems
+
+  const displayedData = isServerPaged
+    ? safeData
+    : pagination
+      ? safeData.slice(startIndex, endIndex)
+      : safeData
 
   const handleRowsPerPageChange = (event) => {
-    setRowsPerPage(Number(event.target.value))
-    setCurrentPage(1)
+    const nextLimit = Number(event.target.value)
+    if (isServerPaged) {
+      onRowsPerPageChange?.(nextLimit)
+    } else {
+      setLocalRowsPerPage(nextLimit)
+      setLocalPage(1)
+    }
+  }
+
+  const handlePageChange = (nextPage) => {
+    const clamped = Math.min(Math.max(1, nextPage), totalPages)
+    if (isServerPaged) {
+      onPageChange?.(clamped)
+    } else {
+      setLocalPage(clamped)
+    }
   }
 
   const handleSearchChange = (event) => {
-    setCurrentPage(1)
+    if (!isServerPaged) {
+      setLocalPage(1)
+    }
     if (onSearchChange) {
       const nextValue =
         typeof event === 'string' ? event : event?.target?.value ?? ''
@@ -134,7 +169,7 @@ export default function DataTable({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      onClick={() => handlePageChange(safePage - 1)}
                       disabled={safePage <= 1}
                       aria-label="Previous page"
                       className="p-1.5 rounded-md border border-border bg-white text-text-primary hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer"
@@ -143,9 +178,7 @@ export default function DataTable({
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                      }
+                      onClick={() => handlePageChange(safePage + 1)}
                       disabled={safePage >= totalPages}
                       aria-label="Next page"
                       className="p-1.5 rounded-md border border-border bg-white text-text-primary hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer"

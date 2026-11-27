@@ -1,6 +1,7 @@
 import session from 'express-session'
 import MongoStore from 'connect-mongo'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -80,15 +81,41 @@ class JsonSessionStore extends session.Store {
 
 export const SESSION_COOKIE_NAME = 'rb.sid'
 
+export function getCookieAttributes(env) {
+  const sameSite = env?.cookieSameSite || 'lax'
+  const secure =
+    typeof env?.cookieSecure === 'boolean'
+      ? env.cookieSecure
+      : Boolean(env?.isProd || sameSite === 'none')
+  return {
+    path: '/',
+    httpOnly: true,
+    sameSite,
+    secure,
+    domain: env?.cookieDomain,
+  }
+}
+
+export function clearSessionCookie(res, env) {
+  res.clearCookie(SESSION_COOKIE_NAME, getCookieAttributes(env))
+}
+
 export function createSessionMiddleware(env) {
+  const useMongoStore =
+    env.mongoUri && (!env.isTest || process.env.ALLOW_TEST_MONGO === 'true' || process.env.TEST_MONGODB_URI)
+
   let store
-  if (env.mongoUri) {
+  if (useMongoStore) {
     store = MongoStore.create({
-      mongoUrl: env.mongoUri,
+      mongoUrl: process.env.TEST_MONGODB_URI || env.mongoUri,
       collectionName: 'sessions',
       ttl: Math.ceil(env.sessionMaxLifetimeMs / 1000),
       autoRemove: 'native',
       touchAfter: 60,
+      mongoOptions: {
+        maxPoolSize: 5,
+        minPoolSize: 1,
+      },
     })
   } else {
     if (env.isProd) {
@@ -96,9 +123,13 @@ export function createSessionMiddleware(env) {
     }
     const localSessionFile =
       process.env.LOCAL_SESSION_FILE ||
-      path.join(__dirname, '..', '..', 'data', 'sessions.json')
+      (env.isTest
+        ? path.join(os.tmpdir(), 'reviewbuddy-test-sessions.json')
+        : path.join(__dirname, '..', '..', 'data', 'sessions.json'))
     store = new JsonSessionStore(localSessionFile)
   }
+
+  const baseCookie = getCookieAttributes(env)
 
   return session({
     name: SESSION_COOKIE_NAME,
@@ -107,13 +138,9 @@ export function createSessionMiddleware(env) {
     resave: false,
     saveUninitialized: false,
     rolling: true, // Extends idle timeout on activity; absolute lifetime enforced in requireAuth
-    proxy: env.isProd,
+    proxy: Boolean(env.trustProxy),
     cookie: {
-      httpOnly: true,
-      secure: env.isProd,
-      sameSite: 'lax',
-      path: '/',
-      domain: env.cookieDomain,
+      ...baseCookie,
       maxAge: env.sessionIdleTimeoutMs,
     },
   })

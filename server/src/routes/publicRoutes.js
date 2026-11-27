@@ -1,11 +1,13 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import {
-  findBusinessByAnyId,
+  findPublicBusinessById,
   incrementAnalyticsEvent,
+  recordSubmissionAnalytics,
   toPublicBusinessPayload,
 } from '../repositories/businessRepo.js'
 import { generateReviewDraft } from '../services/reviewGenerator.js'
+import { publicEventSchema } from '../validators/businessValidators.js'
 
 const router = Router()
 
@@ -15,6 +17,22 @@ const publicLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests. Please wait a moment and try again.' },
+})
+
+const eventsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many analytics events. Please wait a moment.' },
+})
+
+const submissionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many review submissions. Please wait a moment.' },
 })
 
 router.use(publicLimiter)
@@ -28,7 +46,7 @@ router.get('/businesses/:publicId', async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid business identifier' })
     }
 
-    const business = await findBusinessByAnyId(publicId)
+    const business = await findPublicBusinessById(publicId)
     if (!business) {
       return res.status(404).json({ message: 'Business not found' })
     }
@@ -39,14 +57,14 @@ router.get('/businesses/:publicId', async (req, res, next) => {
   }
 })
 
-router.post('/businesses/:publicId/questionnaire/complete', async (req, res, next) => {
+router.post('/businesses/:publicId/questionnaire/complete', submissionLimiter, async (req, res, next) => {
   try {
     const { publicId } = req.params
     if (!VALID_ID_RE.test(publicId)) {
       return res.status(400).json({ message: 'Invalid business identifier' })
     }
 
-    const business = await findBusinessByAnyId(publicId)
+    const business = await findPublicBusinessById(publicId)
     if (!business) {
       return res.status(404).json({ message: 'Business not found' })
     }
@@ -58,7 +76,12 @@ router.post('/businesses/:publicId/questionnaire/complete', async (req, res, nex
     }
 
     const answers = req.body?.answers
-    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    if (
+      !answers ||
+      typeof answers !== 'object' ||
+      Array.isArray(answers) ||
+      Object.keys(answers).length > 60
+    ) {
       return res.status(400).json({ message: 'Invalid questionnaire answers' })
     }
 
@@ -98,10 +121,9 @@ router.post('/businesses/:publicId/questionnaire/complete', async (req, res, nex
       variationSalt: req.body?.isRegenerate ? Date.now() : 0,
     })
 
-    if (!req.body?.isRegenerate) {
-      await incrementAnalyticsEvent(business.publicId, 'questionnaireCompletions')
-    }
-    await incrementAnalyticsEvent(business.publicId, 'reviewDraftsGenerated')
+    await recordSubmissionAnalytics(business.publicId, {
+      isRegenerate: Boolean(req.body?.isRegenerate),
+    })
 
     return res.json({ draft })
   } catch (err) {
@@ -109,16 +131,22 @@ router.post('/businesses/:publicId/questionnaire/complete', async (req, res, nex
   }
 })
 
-router.post('/businesses/:publicId/events', async (req, res, next) => {
+router.post('/businesses/:publicId/events', eventsLimiter, async (req, res, next) => {
   try {
     const { publicId } = req.params
-    const event = String(req.body?.event || '')
     if (!VALID_ID_RE.test(publicId)) {
       return res.status(400).json({ message: 'Invalid business identifier' })
     }
 
-    const updated = await incrementAnalyticsEvent(publicId, event, {
-      rating: req.body?.rating,
+    const parsed = publicEventSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: parsed.error.issues?.[0]?.message || 'Invalid event payload',
+      })
+    }
+
+    const updated = await incrementAnalyticsEvent(publicId, parsed.data.event, {
+      rating: parsed.data.rating,
     })
     if (!updated) {
       return res.status(404).json({ message: 'Business or event not available' })

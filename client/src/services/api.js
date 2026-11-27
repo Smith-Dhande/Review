@@ -22,8 +22,7 @@ export function resolveAssetUrl(url) {
   return url
 }
 
-async function ensureCsrfToken() {
-  if (inMemoryCsrfToken) return inMemoryCsrfToken
+async function fetchCsrfToken() {
   const res = await fetch(`${BASE}/auth/csrf`, {
     method: 'GET',
     credentials: 'include',
@@ -37,16 +36,27 @@ async function ensureCsrfToken() {
   return inMemoryCsrfToken
 }
 
-async function request(path, options = {}) {
+async function ensureCsrfToken() {
+  if (inMemoryCsrfToken) return inMemoryCsrfToken
+  return fetchCsrfToken()
+}
+
+async function refreshCsrfToken() {
+  inMemoryCsrfToken = null
+  return fetchCsrfToken()
+}
+
+async function request(path, options = {}, _retriedCsrf = false) {
   const url = `${BASE}${path}`
   const method = (options.method || 'GET').toUpperCase()
+  const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(method)
 
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   }
 
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  if (isMutation) {
     const token = await ensureCsrfToken()
     if (token) {
       headers['X-CSRF-Token'] = token
@@ -62,6 +72,18 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    if (
+      res.status === 403 &&
+      isMutation &&
+      !_retriedCsrf &&
+      typeof body.message === 'string' &&
+      body.message.toLowerCase().includes('csrf')
+    ) {
+      const freshToken = await refreshCsrfToken()
+      if (freshToken) {
+        return request(path, options, true)
+      }
+    }
     const error = new Error(body.message || `Request failed (${res.status})`)
     error.status = res.status
     throw error
@@ -78,6 +100,11 @@ async function request(path, options = {}) {
 export const authApi = {
   csrf: () => request('/auth/csrf'),
   me: () => request('/auth/me'),
+  updateMe: (data) =>
+    request('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   login: (email, password) =>
     request('/auth/login', {
       method: 'POST',
@@ -93,7 +120,15 @@ export const authApi = {
 
 // ── Businesses (Admin) ──────────────────────────────────
 export const businessesApi = {
-  list: () => request('/businesses'),
+  list: ({ page, limit, search, status } = {}) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (limit) params.set('limit', String(limit))
+    if (search) params.set('search', search)
+    if (status && status !== 'all') params.set('status', status)
+    const qs = params.toString()
+    return request(qs ? `/businesses?${qs}` : '/businesses')
+  },
   get: (id) => request(`/businesses/${id}`),
   create: (data) =>
     request('/businesses', {
@@ -105,6 +140,7 @@ export const businessesApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  delete: (id) => request(`/businesses/${id}`, { method: 'DELETE' }),
   updateQuestions: (id, questions) =>
     request(`/businesses/${id}/questions`, {
       method: 'PUT',
@@ -115,7 +151,7 @@ export const businessesApi = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
-  uploadLogo: async (file) => {
+  uploadLogo: async (file, _retriedCsrf = false) => {
     const token = await ensureCsrfToken()
     const formData = new FormData()
     formData.append('logo', file)
@@ -129,6 +165,17 @@ export const businessesApi = {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
+      if (
+        res.status === 403 &&
+        !_retriedCsrf &&
+        typeof body.message === 'string' &&
+        body.message.toLowerCase().includes('csrf')
+      ) {
+        const freshToken = await refreshCsrfToken()
+        if (freshToken) {
+          return businessesApi.uploadLogo(file, true)
+        }
+      }
       const error = new Error(body.message || `Upload failed (${res.status})`)
       error.status = res.status
       throw error
@@ -136,6 +183,22 @@ export const businessesApi = {
     return res.json()
   },
   getQr: (id) => request(`/businesses/${id}/qr?format=json`),
+}
+
+// ── Analytics ───────────────────────────────────────────
+export const analyticsApi = {
+  overview: ({ range = '30d', from, to } = {}) => {
+    const params = new URLSearchParams({ range })
+    if (range === 'custom' && from) params.set('from', from)
+    if (range === 'custom' && to) params.set('to', to)
+    return request(`/analytics/overview?${params.toString()}`)
+  },
+  business: (businessId, { range = '30d', from, to } = {}) => {
+    const params = new URLSearchParams({ range })
+    if (range === 'custom' && from) params.set('from', from)
+    if (range === 'custom' && to) params.set('to', to)
+    return request(`/analytics/business/${businessId}?${params.toString()}`)
+  },
 }
 
 // ── Public Customer Review Experience ───────────────────

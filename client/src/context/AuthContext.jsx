@@ -75,6 +75,12 @@ export function AuthProvider({ children }) {
     [],
   )
 
+  const updateProfile = useCallback(async (updates) => {
+    const data = await authApi.updateMe(updates)
+    setUser(data.user)
+    return data.user
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   return (
@@ -86,6 +92,7 @@ export function AuthProvider({ children }) {
         error,
         login,
         logout,
+        updateProfile,
         changePassword,
         clearError,
       }}

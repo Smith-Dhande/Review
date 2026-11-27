@@ -1,11 +1,29 @@
 import { pickVariant } from './variationEngine.js'
 
+function cleanOptionValue(str) {
+  return String(str || '')
+    .trim()
+    .replace(/[.!?…]+$/g, '')
+    .trim()
+}
+
 function joinList(items) {
-  const clean = items.map((s) => s.trim()).filter(Boolean)
+  const clean = items.map(cleanOptionValue).filter(Boolean)
   if (clean.length === 0) return ''
   if (clean.length === 1) return clean[0]
   if (clean.length === 2) return `${clean[0]} and ${clean[1]}`
   return `${clean.slice(0, -1).join(', ')}, and ${clean[clean.length - 1]}`
+}
+
+function classifyYesNo(val) {
+  const normalized = cleanOptionValue(val).toLowerCase()
+  if (/^(y+e+s+|yeah|yep|yup|definitely|absolutely|sure|of course)$/.test(normalized)) {
+    return 'yes'
+  }
+  if (/^(n+o+|nope|nah|never|not really)$/.test(normalized)) {
+    return 'no'
+  }
+  return null
 }
 
 function lowerFirst(str) {
@@ -59,6 +77,24 @@ export function generateSentenceForUnit(unit, business, seed, index) {
     return ensurePeriod(unit.values[0])
   }
 
+  // Handle recommendation / yes-no style questions naturally
+  const yesNo = unit.values.length === 1 ? classifyYesNo(rawJoined) : null
+  if (/recommend/i.test(unit.questionText || '')) {
+    if (yesNo === 'yes') {
+      return pickVariant(
+        [
+          `I would definitely recommend ${business.name || 'this place'} to friends.`,
+          'I would gladly recommend visiting.',
+        ],
+        seed,
+        index,
+      )
+    }
+    if (yesNo === 'no') {
+      return 'I would not recommend it based on this experience.'
+    }
+  }
+
   const s = unit.sentiment
 
   switch (unit.category) {
@@ -107,7 +143,7 @@ export function generateSentenceForUnit(unit, business, seed, index) {
       return pickVariant(
         [
           `The food quality was ${val}.`,
-          `In terms of food, ${val} stood out.`,
+          `The food was ${val}.`,
           `The food and flavours were ${val}.`,
         ],
         seed,
@@ -243,6 +279,12 @@ export function generateSentenceForUnit(unit, business, seed, index) {
       return `The ${brand.comfort || 'overall comfort'} was ${val}.`
 
     case 'overall_experience':
+      if (yesNo === 'yes') {
+        return 'Overall, I had a positive experience.'
+      }
+      if (yesNo === 'no') {
+        return 'Overall, the experience did not meet my expectations.'
+      }
       if (s === 'negative') {
         return `Overall, the experience felt ${val}.`
       }

@@ -5,7 +5,7 @@ import { businessesApi } from '../../services/api'
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 
-export default function LogoUpload({ value, onChange }) {
+export default function LogoUpload({ value, onChange, onTempUploaded }) {
   const inputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -28,6 +28,9 @@ export default function LogoUpload({ value, onChange }) {
     setUploading(true)
     try {
       const res = await businessesApi.uploadLogo(file)
+      if (res.logo?.publicId) {
+        onTempUploaded?.(res.logo.publicId)
+      }
       onChange(res.logo)
     } catch (err) {
       setError(err.message || 'Failed to upload logo.')

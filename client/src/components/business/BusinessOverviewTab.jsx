@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Check, Copy, Download, ExternalLink } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Printer } from 'lucide-react'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 import StatusText from '../ui/StatusText'
@@ -9,15 +9,11 @@ import BusinessLogo from '../ui/BusinessLogo'
 import LogoUpload from '../ui/LogoUpload'
 import QrPreviewSvg from './QrPreviewSvg'
 import { getPublicReviewUrl } from '../../context/BusinessesContext'
-import { businessCategories } from '../../data/mockData'
+import { businessesApi } from '../../services/api'
+import { businessCategories } from '../../utils/businessOptions'
 
-export default function BusinessOverviewTab({
-  business,
-  isEditing,
-  onCancelEdit,
-  onSaveEdit,
-}) {
-  const [formData, setFormData] = useState({
+function buildInitialForm(business) {
+  return {
     name: business.name || '',
     logo: business.logo?.url ? business.logo : null,
     category: business.category || businessCategories[0],
@@ -25,20 +21,78 @@ export default function BusinessOverviewTab({
     address: business.address || '',
     phone: business.phone || '',
     email: business.email || '',
-  })
+  }
+}
+
+export default function BusinessOverviewTab({
+  business,
+  isEditing,
+  onCancelEdit,
+  onSaveEdit,
+}) {
+  const [formData, setFormData] = useState(() => buildInitialForm(business))
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [qrDownloading, setQrDownloading] = useState('')
+  const [qrError, setQrError] = useState('')
+
+  const tempLogoIdsRef = useRef(new Set())
 
   const publicUrl = getPublicReviewUrl(business)
-  const fileSlug = business.slug || business.publicId || business.id
+  const targetId = business.publicId || business.id
+  const fileSlug = business.slug || targetId
+
+  const cleanupTempLogos = async (keepPublicId = '') => {
+    const ids = Array.from(tempLogoIdsRef.current).filter(
+      (id) => id && id !== keepPublicId,
+    )
+    tempLogoIdsRef.current.clear()
+    await Promise.all(
+      ids.map((id) => businessesApi.cleanupTempLogo(id).catch(() => { })),
+    )
+  }
 
   const handleChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleLogoChange = (nextLogo) => {
+    const prevId = formData.logo?.publicId
+    if (
+      prevId &&
+      prevId !== nextLogo?.publicId &&
+      tempLogoIdsRef.current.has(prevId)
+    ) {
+      tempLogoIdsRef.current.delete(prevId)
+      businessesApi.cleanupTempLogo(prevId).catch(() => { })
+    }
+    setFormData((prev) => ({ ...prev, logo: nextLogo }))
+  }
+
+  const handleCancel = () => {
+    cleanupTempLogos()
+    setSaveError('')
+    onCancelEdit()
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!formData.name.trim()) return
-    onSaveEdit(formData)
+    if (saving) return
+    if (!formData.name.trim()) {
+      setSaveError('Business name is required.')
+      return
+    }
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSaveEdit(formData)
+      await cleanupTempLogos(formData.logo?.publicId || '')
+    } catch (err) {
+      setSaveError(err.message || 'Could not update business information.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCopyUrl = async () => {
@@ -51,50 +105,76 @@ export default function BusinessOverviewTab({
     }
   }
 
-  const handleDownloadPng = async () => {
+  const handleDownloadQr = async (format) => {
+    if (qrDownloading) return
+    setQrError('')
+    setQrDownloading(format)
     try {
-      const dataUrl = await QRCode.toDataURL(publicUrl, {
-        width: 1024,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: {
-          dark: '#1A1A1A',
-          light: '#FFFFFF',
-        },
-      })
+      const blob = await businessesApi.downloadQr(targetId, format)
+      const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = dataUrl
-      link.download = `${fileSlug}-review-qr.png`
+      link.href = url
+      link.download = `${fileSlug}-review-qr.${format}`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-    } catch {
-      // Ignore download failure
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setQrError(err.message || `Could not download QR ${format.toUpperCase()}.`)
+    } finally {
+      setQrDownloading('')
     }
   }
 
-  const handleDownloadSvg = async () => {
+  const handlePrintQrCard = async () => {
+    setQrError('')
     try {
       const svg = await QRCode.toString(publicUrl, {
         type: 'svg',
         margin: 2,
         errorCorrectionLevel: 'M',
-        color: {
-          dark: '#1A1A1A',
-          light: '#FFFFFF',
-        },
+        color: { dark: '#1A1A1A', light: '#FFFFFF' },
       })
-      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${fileSlug}-review-qr.svg`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const win = window.open('', '_blank', 'width=560,height=720')
+      if (!win) {
+        setQrError('Please allow popups to open the printable QR card.')
+        return
+      }
+      const safeName = String(business.name || 'ReviewBuddy').replace(
+        /[&<>"']/g,
+        (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]),
+      )
+      win.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${safeName} — Review QR Card</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 32px; display: flex; justify-content: center; background: #fafaf8; color: #1a1a1a; }
+    .card { width: 380px; background: #fff; border: 1px solid #e5e5e3; border-radius: 14px; padding: 32px 28px; text-align: center; }
+    .kicker { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #1b6b4a; font-weight: 600; margin: 0 0 8px; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .sub { font-size: 14px; color: #57554f; margin: 0 0 24px; }
+    .qr { width: 240px; height: 240px; margin: 0 auto 20px; border: 1px solid #e5e5e3; border-radius: 10px; padding: 10px; background: #fff; }
+    .qr svg { width: 100%; height: 100%; display: block; }
+    .foot { font-size: 12px; color: #787670; border-top: 1px solid #e5e5e3; padding-top: 14px; margin-top: 14px; }
+    @media print { body { background: #fff; padding: 0; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p class="kicker">Share Your Experience</p>
+    <h1>${safeName}</h1>
+    <p class="sub">Scan this QR code to share quick feedback and draft your review.</p>
+    <div class="qr">${svg}</div>
+    <p class="foot">Powered by ReviewBuddy</p>
+    <button class="no-print" onclick="window.print()" style="margin-top:16px;padding:8px 16px;cursor:pointer;">Print Card</button>
+  </div>
+</body>
+</html>`)
+      win.document.close()
     } catch {
-      // Ignore download failure
+      setQrError('Could not prepare printable QR card.')
     }
   }
 
@@ -116,7 +196,8 @@ export default function BusinessOverviewTab({
 
         <LogoUpload
           value={formData.logo}
-          onChange={(logo) => setFormData((prev) => ({ ...prev, logo }))}
+          onChange={handleLogoChange}
+          onTempUploaded={(pid) => tempLogoIdsRef.current.add(pid)}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -169,11 +250,20 @@ export default function BusinessOverviewTab({
           />
         </div>
 
+        {saveError && (
+          <div
+            role="alert"
+            className="bg-error-light border border-error-border rounded-md px-3 py-2 text-xs text-error"
+          >
+            {saveError}
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 pt-2 border-t border-border">
-          <Button type="button" variant="secondary" onClick={onCancelEdit}>
+          <Button type="button" variant="secondary" onClick={handleCancel}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary">
+          <Button type="submit" variant="primary" loading={saving}>
             Save Changes
           </Button>
         </div>
@@ -273,7 +363,7 @@ export default function BusinessOverviewTab({
         <div className="p-6 space-y-5">
           <div className="flex justify-center py-3 bg-surface/60 rounded-lg border border-border">
             <QrPreviewSvg
-              id={`business-qr-${business.publicId || business.id}`}
+              id={`business-qr-${targetId}`}
               value={publicUrl}
               size={156}
             />
@@ -328,7 +418,8 @@ export default function BusinessOverviewTab({
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={handleDownloadPng}
+                loading={qrDownloading === 'png'}
+                onClick={() => handleDownloadQr('png')}
                 className="w-full"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -336,13 +427,31 @@ export default function BusinessOverviewTab({
               </Button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDownloadSvg}
-              className="w-full text-center text-xs text-text-secondary hover:text-text-primary py-1 cursor-pointer transition-colors"
-            >
-              Download vector SVG
-            </button>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                disabled={qrDownloading === 'svg'}
+                onClick={() => handleDownloadQr('svg')}
+                className="text-xs text-text-secondary hover:text-text-primary py-1 cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {qrDownloading === 'svg' ? 'Downloading SVG...' : 'Download vector SVG'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintQrCard}
+                className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 py-1 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print QR Card</span>
+              </button>
+            </div>
+
+            {qrError && (
+              <p role="alert" className="text-xs text-error">
+                {qrError}
+              </p>
+            )}
           </div>
 
           <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
@@ -350,7 +459,7 @@ export default function BusinessOverviewTab({
               Program NFC tags with this same URL.
             </p>
             <Link
-              to={`/review/${business.publicId || business.id}`}
+              to={`/review/${targetId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 shrink-0"

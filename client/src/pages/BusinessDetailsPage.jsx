@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import StatusText from '../components/ui/StatusText'
 import EmptyState from '../components/ui/EmptyState'
+import LoadingState from '../components/ui/LoadingState'
 import BusinessLogo from '../components/ui/BusinessLogo'
 import BusinessOverviewTab from '../components/business/BusinessOverviewTab'
 import ReviewConfigTab from '../components/business/ReviewConfigTab'
@@ -11,6 +12,7 @@ import QuestionnaireTab from '../components/business/QuestionnaireTab'
 import LandingPageAppearanceTab from '../components/business/LandingPageAppearanceTab'
 import BusinessAnalyticsTab from '../components/business/BusinessAnalyticsTab'
 import { useBusinesses } from '../context/BusinessesContext'
+import { businessesApi } from '../services/api'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -22,23 +24,79 @@ const TABS = [
 
 export default function BusinessDetailsPage() {
   const { businessId } = useParams()
+  const navigate = useNavigate()
   const {
     businesses,
     updateBusiness,
+    deleteBusiness,
     toggleBusinessStatus,
     updateReviewConfig,
     updateAppearance,
     setQuestions,
   } = useBusinesses()
 
-  const [activeTab, setActiveTab] = useState('overview')
-  const [isEditing, setIsEditing] = useState(false)
-
-  const business = businesses.find(
+  const cachedBusiness = businesses.find(
     (b) => b.id === businessId || b.publicId === businessId,
   )
 
-  if (!business) {
+  const [fetchedBusiness, setFetchedBusiness] = useState(null)
+  const [loadedId, setLoadedId] = useState('')
+  const [fetchError, setFetchError] = useState('')
+  const [notFoundId, setNotFoundId] = useState('')
+
+  const [activeTab, setActiveTab] = useState('overview')
+  const [isEditing, setIsEditing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [statusLoading, setStatusLoading] = useState(false)
+
+  useEffect(() => {
+    let active = true
+
+    businessesApi
+      .get(businessId)
+      .then((data) => {
+        if (!active) return
+        setFetchError('')
+        setNotFoundId('')
+        setFetchedBusiness(data.business || null)
+        setLoadedId(businessId)
+      })
+      .catch((err) => {
+        if (!active) return
+        if (err.status === 404 || err.status === 400) {
+          setNotFoundId(businessId)
+          setFetchedBusiness(null)
+        } else {
+          setFetchError(err.message || 'Unable to load business details.')
+        }
+        setLoadedId(businessId)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [businessId])
+
+  const notFound = notFoundId === businessId
+  const fetching = loadedId !== businessId && !notFound && !fetchError
+
+  const business =
+    (fetchedBusiness &&
+      (fetchedBusiness.publicId === businessId || fetchedBusiness.id === businessId)
+      ? fetchedBusiness
+      : null) || cachedBusiness
+
+  if (fetching && !business) {
+    return (
+      <div className="bg-card rounded-lg border border-border">
+        <LoadingState message="Loading business workspace..." />
+      </div>
+    )
+  }
+
+  if (notFound || (!business && !fetchError)) {
     return (
       <div className="bg-card rounded-lg border border-border">
         <EmptyState
@@ -57,9 +115,58 @@ export default function BusinessDetailsPage() {
     )
   }
 
+  if (!business && fetchError) {
+    return (
+      <div className="bg-card rounded-lg border border-border p-8 text-center space-y-4">
+        <p role="alert" className="text-sm text-error">
+          {fetchError}
+        </p>
+        <Link to="/businesses">
+          <Button variant="secondary" size="sm">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Businesses
+          </Button>
+        </Link>
+      </div>
+    )
+  }
+
+  const targetId = business.publicId || business.id
+
   const handleSaveEdit = async (updates) => {
-    await updateBusiness(business.publicId || business.id, updates)
+    const updated = await updateBusiness(targetId, updates)
+    setFetchedBusiness(updated)
     setIsEditing(false)
+    return updated
+  }
+
+  const handleToggleStatus = async () => {
+    if (statusLoading) return
+    setActionError('')
+    setStatusLoading(true)
+    try {
+      const updated = await toggleBusinessStatus(targetId, business.status)
+      if (updated) setFetchedBusiness(updated)
+    } catch (err) {
+      setActionError(err.message || 'Could not update business status.')
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (deleting) return
+    setActionError('')
+    setDeleting(true)
+    try {
+      await deleteBusiness(targetId)
+      navigate('/businesses', { replace: true })
+    } catch (err) {
+      setActionError(err.message || 'Could not delete business.')
+      setConfirmDelete(false)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -104,7 +211,7 @@ export default function BusinessDetailsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <Button
             variant="secondary"
             size="sm"
@@ -118,16 +225,53 @@ export default function BusinessDetailsPage() {
           <Button
             variant={business.status === 'active' ? 'secondary' : 'primary'}
             size="sm"
-            onClick={() =>
-              toggleBusinessStatus(business.publicId || business.id)
-            }
+            loading={statusLoading}
+            onClick={handleToggleStatus}
           >
             {business.status === 'active'
               ? 'Pause Business'
               : 'Activate Business'}
           </Button>
+          {!confirmDelete ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              aria-label="Delete Business"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-error" />
+            </Button>
+          ) : (
+            <div className="inline-flex items-center gap-1.5">
+              <Button
+                variant="danger"
+                size="sm"
+                loading={deleting}
+                onClick={handleDelete}
+              >
+                Confirm Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="bg-error-light border border-error-border rounded-md px-4 py-3 text-xs text-error"
+        >
+          {actionError}
+        </div>
+      )}
 
       {/* Internal workspace tabs */}
       <div className="border-b border-border overflow-x-auto">
@@ -170,6 +314,7 @@ export default function BusinessDetailsPage() {
       <div>
         {activeTab === 'overview' && (
           <BusinessOverviewTab
+            key={`${targetId}-${isEditing}`}
             business={business}
             isEditing={isEditing}
             onCancelEdit={() => setIsEditing(false)}
@@ -180,27 +325,39 @@ export default function BusinessDetailsPage() {
         {activeTab === 'questionnaire' && (
           <QuestionnaireTab
             questions={business.questions}
-            onChange={(updater) =>
-              setQuestions(business.publicId || business.id, updater)
-            }
+            onChange={async (updater) => {
+              const updated = await setQuestions(
+                targetId,
+                updater,
+                business.questions || [],
+              )
+              if (updated) setFetchedBusiness(updated)
+              return updated
+            }}
           />
         )}
 
         {activeTab === 'config' && (
           <ReviewConfigTab
+            key={targetId}
             business={business}
-            onSave={(cfg) =>
-              updateReviewConfig(business.publicId || business.id, cfg)
-            }
+            onSave={async (cfg) => {
+              const updated = await updateReviewConfig(targetId, cfg)
+              if (updated) setFetchedBusiness(updated)
+              return updated
+            }}
           />
         )}
 
         {activeTab === 'appearance' && (
           <LandingPageAppearanceTab
+            key={targetId}
             business={business}
-            onSave={(appCfg) =>
-              updateAppearance(business.publicId || business.id, appCfg)
-            }
+            onSave={async (appCfg) => {
+              const updated = await updateAppearance(targetId, appCfg)
+              if (updated) setFetchedBusiness(updated)
+              return updated
+            }}
           />
         )}
 

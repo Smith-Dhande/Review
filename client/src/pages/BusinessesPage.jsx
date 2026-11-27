@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, Plus } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -10,7 +10,9 @@ import Input from '../components/ui/Input'
 import BusinessLogo from '../components/ui/BusinessLogo'
 import LogoUpload from '../components/ui/LogoUpload'
 import { useBusinesses } from '../context/BusinessesContext'
-import { businessCategories } from '../data/mockData'
+import { businessesApi } from '../services/api'
+import { businessCategories } from '../utils/businessOptions'
+import { normalizeGoogleReviewInput } from '../utils/googleReview'
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '—'
@@ -36,45 +38,78 @@ const initialFormState = {
 
 export default function BusinessesPage() {
   const navigate = useNavigate()
-  const { businesses, addBusiness, updateBusiness, toggleBusinessStatus } =
-    useBusinesses()
+  const {
+    businesses,
+    pagination,
+    counts,
+    loading,
+    error: listError,
+    fetchBusinesses,
+    addBusiness,
+    updateBusiness,
+    toggleBusinessStatus,
+  } = useBusinesses()
 
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormState)
+  const [isSaving, setIsSaving] = useState(false)
+  const [formError, setFormError] = useState('')
 
-  const filteredBusinesses = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return businesses.filter((business) => {
-      const matchesStatus =
-        statusFilter === 'all' || business.status === statusFilter
-      if (!matchesStatus) return false
-      if (!query) return true
-      return (
-        business.name.toLowerCase().includes(query) ||
-        business.category.toLowerCase().includes(query) ||
-        (business.location || '').toLowerCase().includes(query) ||
-        (business.email || '').toLowerCase().includes(query) ||
-        (business.phone || '').toLowerCase().includes(query)
-      )
+  const [togglingId, setTogglingId] = useState(null)
+  const [statusError, setStatusError] = useState('')
+
+  const tempLogoIdsRef = useRef(new Set())
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+    }, 220)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    fetchBusinesses({
+      page,
+      limit,
+      search: debouncedSearch,
+      status: statusFilter,
     })
-  }, [businesses, search, statusFilter])
+  }, [fetchBusinesses, page, limit, debouncedSearch, statusFilter])
+
+  const cleanupUnsavedTempLogos = async (keepPublicId = '') => {
+    const ids = Array.from(tempLogoIdsRef.current).filter(
+      (id) => id && id !== keepPublicId,
+    )
+    tempLogoIdsRef.current.clear()
+    await Promise.all(
+      ids.map((id) => businessesApi.cleanupTempLogo(id).catch(() => { })),
+    )
+  }
 
   const handleFieldChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
   const handleOpenAdd = () => {
+    tempLogoIdsRef.current.clear()
     setEditingId(null)
+    setFormError('')
     setFormData(initialFormState)
     setIsPanelOpen(true)
   }
 
   const handleOpenEdit = (e, business) => {
     e.stopPropagation()
-    setEditingId(business.id)
+    tempLogoIdsRef.current.clear()
+    setEditingId(business.publicId || business.id)
+    setFormError('')
     setFormData({
       name: business.name || '',
       logo: business.logo?.url ? business.logo : null,
@@ -90,23 +125,51 @@ export default function BusinessesPage() {
     setIsPanelOpen(true)
   }
 
-  const handleToggleStatus = (e, businessId) => {
+  const handleToggleStatus = async (e, row) => {
     e.stopPropagation()
-    toggleBusinessStatus(businessId)
+    const targetId = row.publicId || row.id
+    if (togglingId === targetId) return
+    setStatusError('')
+    setTogglingId(targetId)
+    try {
+      await toggleBusinessStatus(targetId, row.status)
+    } catch (err) {
+      setStatusError(err.message || 'Could not update business status.')
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   const handleClosePanel = () => {
+    cleanupUnsavedTempLogos()
     setIsPanelOpen(false)
     setEditingId(null)
+    setFormError('')
     setFormData(initialFormState)
   }
 
-  const [isSaving, setIsSaving] = useState(false)
-  const [formError, setFormError] = useState('')
+  const handleLogoChange = (nextLogo) => {
+    const prevId = formData.logo?.publicId
+    if (
+      prevId &&
+      prevId !== nextLogo?.publicId &&
+      tempLogoIdsRef.current.has(prevId)
+    ) {
+      tempLogoIdsRef.current.delete(prevId)
+      businessesApi.cleanupTempLogo(prevId).catch(() => { })
+    }
+    setFormData((prev) => ({ ...prev, logo: nextLogo }))
+  }
 
   const handleSave = async (e) => {
     e.preventDefault()
-    if (!formData.name.trim()) return
+    if (isSaving) return
+    if (!formData.name.trim()) {
+      setFormError('Business name is required.')
+      return
+    }
+
+    const normalizedUrl = normalizeGoogleReviewInput(formData.googleReviewUrl)
 
     setIsSaving(true)
     setFormError('')
@@ -121,11 +184,21 @@ export default function BusinessesPage() {
           phone: formData.phone,
           email: formData.email,
           status: formData.status,
+          reviewConfig: {
+            googleReviewUrl: normalizedUrl,
+            welcomeMessage: formData.welcomeMessage,
+          },
         })
       } else {
-        await addBusiness(formData)
+        await addBusiness({
+          ...formData,
+          googleReviewUrl: normalizedUrl,
+        })
       }
-      handleClosePanel()
+      await cleanupUnsavedTempLogos(formData.logo?.publicId || '')
+      setIsPanelOpen(false)
+      setEditingId(null)
+      setFormData(initialFormState)
     } catch (err) {
       setFormError(err.message || 'Could not save business')
     } finally {
@@ -210,24 +283,33 @@ export default function BusinessesPage() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_, row) => (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => handleOpenEdit(e, row)}
-            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-primary hover:bg-surface transition-colors duration-150 cursor-pointer"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleToggleStatus(e, row.id)}
-            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-secondary hover:text-text-primary hover:bg-surface transition-colors duration-150 cursor-pointer"
-          >
-            {row.status === 'active' ? 'Pause' : 'Activate'}
-          </button>
-        </div>
-      ),
+      render: (_, row) => {
+        const rowId = row.publicId || row.id
+        const isToggling = togglingId === rowId
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => handleOpenEdit(e, row)}
+              className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-primary hover:bg-surface transition-colors duration-150 cursor-pointer"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              disabled={isToggling}
+              onClick={(e) => handleToggleStatus(e, row)}
+              className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-white text-text-secondary hover:text-text-primary hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer"
+            >
+              {isToggling
+                ? 'Updating...'
+                : row.status === 'active'
+                  ? 'Pause'
+                  : 'Activate'}
+            </button>
+          </div>
+        )
+      },
     },
   ]
 
@@ -253,7 +335,8 @@ export default function BusinessesPage() {
           <div className="mb-4">
             <LogoUpload
               value={formData.logo}
-              onChange={(logo) => setFormData((prev) => ({ ...prev, logo }))}
+              onChange={handleLogoChange}
+              onTempUploaded={(pid) => tempLogoIdsRef.current.add(pid)}
             />
           </div>
 
@@ -341,28 +424,33 @@ export default function BusinessesPage() {
               onChange={handleFieldChange('address')}
             />
 
-            {!editingId && (
-              <Input
-                label="Google Review URL"
-                name="googleReviewUrl"
-                type="url"
-                placeholder="https://g.page/r/..."
-                value={formData.googleReviewUrl}
-                onChange={handleFieldChange('googleReviewUrl')}
-              />
-            )}
+            <Input
+              label="Google Place ID or Review URL"
+              name="googleReviewUrl"
+              type="text"
+              placeholder="ChIJCcAieFGl1jsREQ6h9oXJa-8"
+              value={formData.googleReviewUrl}
+              onChange={handleFieldChange('googleReviewUrl')}
+              onBlur={(e) => {
+                const normalized = normalizeGoogleReviewInput(e.target.value)
+                if (normalized !== e.target.value) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    googleReviewUrl: normalized,
+                  }))
+                }
+              }}
+            />
 
-            {!editingId && (
-              <div className="md:col-span-2">
-                <Input
-                  label="Welcome Message (Optional)"
-                  name="welcomeMessage"
-                  placeholder="Thanks for visiting! Answer a few quick questions to draft your review."
-                  value={formData.welcomeMessage}
-                  onChange={handleFieldChange('welcomeMessage')}
-                />
-              </div>
-            )}
+            <div className="md:col-span-2">
+              <Input
+                label="Welcome Message (Optional)"
+                name="welcomeMessage"
+                placeholder="Thanks for visiting! Answer a few quick questions to draft your review."
+                value={formData.welcomeMessage}
+                onChange={handleFieldChange('welcomeMessage')}
+              />
+            </div>
           </div>
 
           {formError && (
@@ -389,6 +477,15 @@ export default function BusinessesPage() {
         </form>
       </SlideDownPanel>
 
+      {(statusError || listError) && (
+        <div
+          role="alert"
+          className="bg-error-light border border-error-border rounded-md px-4 py-3 text-xs text-error"
+        >
+          {statusError || listError}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div
@@ -397,25 +494,21 @@ export default function BusinessesPage() {
           className="inline-flex items-center rounded-md border border-border bg-card p-0.5 self-start"
         >
           {[
-            { id: 'all', label: `All (${businesses.length})` },
-            {
-              id: 'active',
-              label: `Active (${businesses.filter((b) => b.status === 'active').length})`,
-            },
-            {
-              id: 'paused',
-              label: `Paused (${businesses.filter((b) => b.status === 'paused').length})`,
-            },
+            { id: 'all', label: `All (${counts.all ?? 0})` },
+            { id: 'active', label: `Active (${counts.active ?? 0})` },
+            { id: 'paused', label: `Paused (${counts.paused ?? 0})` },
           ].map((tab) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${
-                statusFilter === tab.id
+              onClick={() => {
+                setStatusFilter(tab.id)
+                setPage(1)
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${statusFilter === tab.id
                   ? 'bg-surface text-text-primary'
                   : 'text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -425,13 +518,23 @@ export default function BusinessesPage() {
 
       <DataTable
         columns={columns}
-        data={filteredBusinesses}
+        data={businesses}
+        loading={loading}
         searchable
-        searchPlaceholder="Search businesses by name, category, location, or contact..."
+        searchPlaceholder="Search businesses by name, category, or location..."
         searchValue={search}
-        onSearchChange={setSearch}
+        onSearchChange={(val) => {
+          setSearch(val)
+          setPage(1)
+        }}
         pagination
-        onRowClick={(row) => navigate(`/businesses/${row.id}`)}
+        serverPagination={pagination}
+        onPageChange={(nextPage) => setPage(nextPage)}
+        onRowsPerPageChange={(nextLimit) => {
+          setLimit(nextLimit)
+          setPage(1)
+        }}
+        onRowClick={(row) => navigate(`/businesses/${row.publicId || row.id}`)}
         emptyTitle="No businesses found"
         emptyDescription="Try adjusting your search or add a new business to get started."
         emptyIcon={Building2}

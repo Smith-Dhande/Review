@@ -59,6 +59,7 @@ export default function PublicReviewExperience({
   const isCompact = appearance.layoutStyle === 'compact'
   const hasUploadedLogo = Boolean(business?.logo?.url || business?.logoUrl)
   const categoryTheme = getCategoryTheme(business?.category)
+  const autoCopyPrompt = business?.reviewConfig?.autoCopyPrompt ?? true
 
   useEffect(() => {
     loadGoogleFont(fontFamily)
@@ -688,6 +689,30 @@ export default function PublicReviewExperience({
             </p>
           </div>
 
+          {!copied && (business?.reviewConfig?.autoCopyPrompt ?? true) && (
+            <p className="text-xs text-[#666560]">
+              Tap <strong>Copy Review</strong> first so your draft is ready to
+              paste on Google Reviews.
+            </p>
+          )}
+
+          {autoCopyPrompt && !copied && !manualCopyHint && (
+            <div
+              data-testid="autocopy-prompt"
+              className="rounded-md border px-4 py-2.5 text-xs text-[#43423D]"
+              style={{
+                borderColor: `${accentColor}40`,
+                backgroundColor: `${accentColor}0A`,
+              }}
+            >
+              <span className="font-semibold" style={{ color: accentColor }}>
+                Step 1:
+              </span>{' '}
+              Tap <strong>Copy Review</strong> below so it&apos;s ready to paste
+              when Google Reviews opens.
+            </div>
+          )}
+
           {copied && (
             <div
               className="rounded-md px-4 py-2.5 text-xs font-medium flex items-center gap-2"
@@ -697,7 +722,11 @@ export default function PublicReviewExperience({
               }}
             >
               <Check className="w-4 h-4 shrink-0" />
-              <span>Review copied successfully! Paste it on Google Reviews.</span>
+              <span>
+                {autoCopyPrompt
+                  ? 'Review copied! Now tap Continue to Google Reviews and paste.'
+                  : 'Review copied successfully! Paste it on Google Reviews.'}
+              </span>
             </div>
           )}
 
@@ -728,7 +757,8 @@ export default function PublicReviewExperience({
               )}
             </button>
 
-            {business?.reviewConfig?.googleReviewUrl ? (
+            {business?.reviewConfig?.googleReviewUrl &&
+            /^https?:\/\//i.test(business.reviewConfig.googleReviewUrl) ? (
               <a
                 href={isPreview ? undefined : business.reviewConfig.googleReviewUrl}
                 target={isPreview ? undefined : '_blank'}

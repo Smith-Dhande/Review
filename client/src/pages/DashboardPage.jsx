@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
 import ChartCard from '../components/ui/ChartCard'
@@ -8,7 +8,7 @@ import BusinessLogo from '../components/ui/BusinessLogo'
 import ScanActivityChart from '../components/charts/ScanActivityChart'
 import CustomerJourneyCard from '../components/charts/CustomerJourneyCard'
 import { useBusinesses } from '../context/BusinessesContext'
-import { dashboardAnalyticsByRange } from '../data/mockData'
+import { analyticsApi } from '../services/api'
 
 const DATE_RANGES = [
   { id: '7d', label: '7 days' },
@@ -21,97 +21,130 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { businesses } = useBusinesses()
   const [range, setRange] = useState('30d')
-  const [customFrom, setCustomFrom] = useState('2026-01-01')
-  const [customTo, setCustomTo] = useState('2026-11-26')
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
+    return d.toISOString().slice(0, 10)
+  })
+  const [customTo, setCustomTo] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  )
 
-  const rangeData =
-    dashboardAnalyticsByRange[range] || dashboardAnalyticsByRange['30d']
+  const [overview, setOverview] = useState({
+    businessCounts: { total: 0, active: 0, paused: 0 },
+    stats: {
+      totalScans: 0,
+      landingViews: 0,
+      totalInitialRatings: 0,
+      averageInitialRating: 0,
+      questionnaireCompletions: 0,
+      reviewDraftsGenerated: 0,
+      copyClicks: 0,
+      googleReviewRedirects: 0,
+    },
+    scanActivity: [],
+    businessPerformance: [],
+    journey: [],
+  })
+  const [loadedKey, setLoadedKey] = useState('')
+  const [fetchError, setFetchError] = useState('')
 
-  const liveCounts = useMemo(() => {
+  const customRangeError =
+    range === 'custom' && (!customFrom || !customTo || customFrom > customTo)
+      ? 'Start date must be on or before end date.'
+      : ''
+  const queryKey = `${range}:${customFrom}:${customTo}`
+  const loadingOverview = !customRangeError && loadedKey !== queryKey
+  const overviewError = customRangeError || fetchError
+
+  useEffect(() => {
+    let active = true
+    if (customRangeError) return undefined
+
+    analyticsApi
+      .overview({
+        range,
+        from: range === 'custom' ? customFrom : undefined,
+        to: range === 'custom' ? customTo : undefined,
+      })
+      .then((data) => {
+        if (!active) return
+        setFetchError('')
+        setOverview(data)
+        setLoadedKey(queryKey)
+      })
+      .catch((err) => {
+        if (active) {
+          setFetchError(err.message || 'Unable to load scan activity')
+          setLoadedKey(queryKey)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [range, customFrom, customTo, customRangeError, queryKey])
+
+  const businessCounts = useMemo(() => {
+    if (overview.businessCounts) return overview.businessCounts
     return businesses.reduce(
       (acc, biz) => {
         acc.total += 1
         if (biz.status === 'active') acc.active += 1
         if (biz.status === 'paused') acc.paused += 1
-        acc.totalScans += biz.analytics?.totalScans || 0
-        acc.landingViews += biz.analytics?.landingViews || 0
-        acc.totalRatings += biz.analytics?.totalInitialRatings || 0
-        acc.ratingSum += biz.analytics?.ratingSum || 0
-        acc.completions += biz.analytics?.questionnaireCompletions || 0
-        acc.drafts += biz.analytics?.reviewDraftsGenerated || 0
-        acc.copies += biz.analytics?.copyClicks || 0
-        acc.redirects += biz.analytics?.googleReviewRedirects || 0
         return acc
       },
-      {
-        total: 0,
-        active: 0,
-        paused: 0,
-        totalScans: 0,
-        landingViews: 0,
-        totalRatings: 0,
-        ratingSum: 0,
-        completions: 0,
-        drafts: 0,
-        copies: 0,
-        redirects: 0,
-      },
+      { total: 0, active: 0, paused: 0 },
     )
-  }, [businesses])
+  }, [overview.businessCounts, businesses])
 
+  const stats = useMemo(() => overview.stats || {}, [overview.stats])
   const avgInitialRating =
-    liveCounts.totalRatings > 0
-      ? `${(liveCounts.ratingSum / liveCounts.totalRatings).toFixed(1)} / 5`
+    stats.totalInitialRatings > 0
+      ? `${Number(stats.averageInitialRating || 0).toFixed(1)} / 5`
       : '—'
 
   const metrics = useMemo(
     () => [
-      { label: 'Total Businesses', value: liveCounts.total.toLocaleString() },
-      { label: 'Active Businesses', value: liveCounts.active.toLocaleString() },
-      { label: 'Paused Businesses', value: liveCounts.paused.toLocaleString() },
-      { label: 'Total Scans', value: liveCounts.totalScans.toLocaleString() },
+      { label: 'Total Businesses', value: businessCounts.total.toLocaleString() },
+      { label: 'Active Businesses', value: businessCounts.active.toLocaleString() },
+      { label: 'Paused Businesses', value: businessCounts.paused.toLocaleString() },
+      {
+        label: 'Landing-Page Visits',
+        value: (stats.landingViews || 0).toLocaleString(),
+      },
       {
         label: 'Initial Ratings',
-        value: liveCounts.totalRatings.toLocaleString(),
+        value: (stats.totalInitialRatings || 0).toLocaleString(),
         hint: `Avg ${avgInitialRating}`,
       },
       {
         label: 'Questionnaire Completions',
-        value: liveCounts.completions.toLocaleString(),
+        value: (stats.questionnaireCompletions || 0).toLocaleString(),
       },
       {
         label: 'Review Drafts Generated',
-        value: liveCounts.drafts.toLocaleString(),
+        value: (stats.reviewDraftsGenerated || 0).toLocaleString(),
       },
       {
         label: 'Google Review Redirects',
-        value: liveCounts.redirects.toLocaleString(),
-        hint: `${liveCounts.copies.toLocaleString()} copies`,
+        value: (stats.googleReviewRedirects || 0).toLocaleString(),
+        hint: `${(stats.copyClicks || 0).toLocaleString()} copies`,
       },
     ],
-    [liveCounts, avgInitialRating],
-  )
-
-  const liveJourney = useMemo(
-    () => [
-      { stage: 'Total Scans', count: liveCounts.totalScans },
-      { stage: 'Landing-Page Views', count: liveCounts.landingViews },
-      { stage: 'Initial Ratings', count: liveCounts.totalRatings },
-      { stage: 'Questionnaire Completions', count: liveCounts.completions },
-      { stage: 'Review Drafts Generated', count: liveCounts.drafts },
-      { stage: 'Copy Clicks', count: liveCounts.copies },
-      { stage: 'Google Review Redirects', count: liveCounts.redirects },
-    ],
-    [liveCounts],
+    [businessCounts, stats, avgInitialRating],
   )
 
   const businessPerformance = useMemo(() => {
+    if (Array.isArray(overview.businessPerformance)) {
+      return overview.businessPerformance
+    }
     return [...businesses]
       .sort(
-        (a, b) => (b.analytics?.totalScans || 0) - (a.analytics?.totalScans || 0),
+        (a, b) =>
+          (b.analytics?.landingViews || 0) - (a.analytics?.landingViews || 0),
       )
       .slice(0, 8)
-  }, [businesses])
+  }, [overview.businessPerformance, businesses])
 
   const performanceColumns = useMemo(
     () => [
@@ -143,11 +176,15 @@ export default function DashboardPage() {
         render: (_, row) => <StatusText status={row.status} />,
       },
       {
-        key: 'totalScans',
-        label: 'Total Scans',
+        key: 'landingViews',
+        label: 'Visits',
         render: (_, row) => (
           <span className="tabular-nums text-text-primary">
-            {(row.analytics?.totalScans || 0).toLocaleString()}
+            {(
+              row.landingViews ??
+              row.analytics?.landingViews ??
+              0
+            ).toLocaleString()}
           </span>
         ),
       },
@@ -156,7 +193,11 @@ export default function DashboardPage() {
         label: 'Completions',
         render: (_, row) => (
           <span className="tabular-nums text-text-secondary">
-            {(row.analytics?.questionnaireCompletions || 0).toLocaleString()}
+            {(
+              row.questionnaireCompletions ??
+              row.analytics?.questionnaireCompletions ??
+              0
+            ).toLocaleString()}
           </span>
         ),
       },
@@ -165,7 +206,11 @@ export default function DashboardPage() {
         label: 'Drafts',
         render: (_, row) => (
           <span className="tabular-nums text-text-secondary">
-            {(row.analytics?.reviewDraftsGenerated || 0).toLocaleString()}
+            {(
+              row.reviewDraftsGenerated ??
+              row.analytics?.reviewDraftsGenerated ??
+              0
+            ).toLocaleString()}
           </span>
         ),
       },
@@ -174,7 +219,11 @@ export default function DashboardPage() {
         label: 'Google Redirects',
         render: (_, row) => (
           <span className="tabular-nums font-medium text-text-primary">
-            {(row.analytics?.googleReviewRedirects || 0).toLocaleString()}
+            {(
+              row.googleReviewRedirects ??
+              row.analytics?.googleReviewRedirects ??
+              0
+            ).toLocaleString()}
           </span>
         ),
       },
@@ -198,11 +247,10 @@ export default function DashboardPage() {
                 key={item.id}
                 type="button"
                 onClick={() => setRange(item.id)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${
-                  range === item.id
-                    ? 'bg-surface text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer ${range === item.id
+                  ? 'bg-surface text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
               >
                 {item.label}
               </button>
@@ -243,11 +291,9 @@ export default function DashboardPage() {
             return (
               <div
                 key={metric.label}
-                className={`px-5 py-4 border-border ${
-                  isTopRow ? 'border-b' : 'border-b lg:border-b-0'
-                } ${idx % 2 === 0 ? 'border-r' : 'lg:border-r'} ${
-                  idx === 3 || idx === 7 ? 'lg:border-r-0' : ''
-                }`}
+                className={`px-5 py-4 border-border ${isTopRow ? 'border-b' : 'border-b lg:border-b-0'
+                  } ${idx % 2 === 0 ? 'border-r' : 'lg:border-r'} ${idx === 3 || idx === 7 ? 'lg:border-r-0' : ''
+                  }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-text-secondary">
@@ -272,12 +318,21 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard
           title="Scan Activity"
-          description="Total scans over the selected period"
+          description="Landing-page visits recorded over the selected period"
         >
-          <ScanActivityChart data={rangeData.scanActivity} />
+          {loadingOverview ? (
+            <div className="h-[260px] flex items-center justify-center text-sm text-text-tertiary">
+              Loading analytics...
+            </div>
+          ) : (
+            <ScanActivityChart
+              data={overview.scanActivity}
+              error={overviewError}
+            />
+          )}
         </ChartCard>
 
-        <CustomerJourneyCard stages={liveJourney} />
+        <CustomerJourneyCard stages={overview.journey} />
       </div>
 
       {/* Business Performance */}

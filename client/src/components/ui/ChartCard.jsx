@@ -5,7 +5,7 @@ export default function ChartCard({
   className = '',
 }) {
   return (
-    <div className={`bg-card rounded-lg border border-border ${className}`.trim()}>
+    <div className={`bg-card rounded-lg border border-border min-w-0 ${className}`.trim()}>
       <div className="px-5 pt-5 pb-0">
         <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
         {description && (

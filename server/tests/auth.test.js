@@ -13,7 +13,12 @@ process.env.FRONTEND_URL = 'http://localhost:5173'
 process.env.CORS_ORIGINS = 'http://localhost:5173'
 process.env.LOCAL_ADMIN_FILE = path.join(tmpDir, 'admin.json')
 process.env.LOCAL_SESSION_FILE = path.join(tmpDir, 'sessions.json')
+process.env.LOCAL_BUSINESSES_FILE = path.join(tmpDir, 'businesses.json')
 process.env.LOGIN_RATE_LIMIT_MAX = '100' // High for general tests; dedicated rate-limit test below
+
+test.after(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true })
+})
 
 const { createApp } = await import('../src/app.js')
 const { createAdminRecord } = await import('../src/repositories/adminRepo.js')

@@ -10,21 +10,28 @@ export default function LoginPage() {
   const { login, isLoading, error, clearError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
+  const [localError, setLocalError] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const success = await login(email.trim(), password)
+    setLocalError('')
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) {
+      setLocalError('Please enter both email and password.')
+      return
+    }
+    const success = await login(trimmedEmail, password)
     if (success) {
       navigate('/dashboard', { replace: true })
     }
   }
 
+  const displayedError = localError || error
+
   return (
     <div className="min-h-screen flex bg-bg">
       {/* Left Brand Panel — Editorial architectural composition */}
       <div className="hidden md:flex md:w-[54%] bg-[#121312] relative overflow-hidden flex-col justify-between p-12 border-r border-[#232523]">
-        {/* Subtle architectural grid lines */}
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none opacity-[0.07]"
@@ -34,7 +41,6 @@ export default function LoginPage() {
             backgroundSize: '64px 64px',
           }}
         />
-        {/* Restrained single-accent hairline */}
         <div
           aria-hidden="true"
           className="absolute top-0 left-12 w-px h-full bg-[#1B6B4A]/30 pointer-events-none"
@@ -44,9 +50,6 @@ export default function LoginPage() {
           <span className="text-lg font-bold text-white tracking-tight">
             ReviewBuddy
           </span>
-          {/* <span className="text-xs font-medium text-[#7A7E7B] tracking-wider uppercase">
-            Admin Console
-          </span> */}
         </div>
 
         <div className="relative z-10 max-w-md">
@@ -63,7 +66,6 @@ export default function LoginPage() {
             monitor customer journey conversion across every location.
           </p>
 
-          {/* Structured spec strip */}
           <div className="mt-10 pt-6 border-t border-[#262826] grid grid-cols-3 gap-6">
             <div>
               <p className="text-xs text-[#6E726F]">Touchpoints</p>
@@ -99,7 +101,7 @@ export default function LoginPage() {
             Enter your administrator credentials to continue.
           </p>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <Input
               label="Email"
               type="email"
@@ -107,6 +109,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => {
                 if (error) clearError()
+                if (localError) setLocalError('')
                 setEmail(e.target.value)
               }}
               autoComplete="email"
@@ -120,6 +123,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => {
                   if (error) clearError()
+                  if (localError) setLocalError('')
                   setPassword(e.target.value)
                 }}
                 autoComplete="current-password"
@@ -127,37 +131,14 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && (
+            {displayedError && (
               <div
                 role="alert"
                 className="bg-error-light border border-error-border rounded-md px-3 py-2.5 text-sm text-error mt-4"
               >
-                {error}
+                {displayedError}
               </div>
             )}
-
-            <div className="mt-4 flex items-center justify-between">
-              <label
-                htmlFor="remember-me"
-                className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none"
-              >
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded accent-primary cursor-pointer"
-                />
-                <span>Remember me</span>
-              </label>
-
-              <button
-                type="button"
-                className="text-xs text-text-secondary hover:text-primary cursor-pointer transition-colors duration-150"
-              >
-                Forgot password?
-              </button>
-            </div>
 
             <Button
               type="submit"

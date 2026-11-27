@@ -9,7 +9,7 @@ export default function CustomerJourneyCard({ stages = [] }) {
             Customer Journey
           </h3>
           <p className="text-xs text-text-tertiary mt-0.5">
-            Progression from initial scan to outbound Google review redirect
+            Progression from landing-page view to outbound Google review redirect
           </p>
         </div>
         <span className="text-xs text-text-tertiary">

@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/errorHandler.js'
 import { createAuthRouter } from './routes/authRoutes.js'
 import businessRoutes from './routes/businessRoutes.js'
 import publicRoutes from './routes/publicRoutes.js'
+import analyticsRoutes from './routes/analyticsRoutes.js'
 import { createUploadRouter } from './routes/uploadRoutes.js'
 
 export function createApp() {
@@ -15,24 +16,32 @@ export function createApp() {
   initCloudinary()
   const app = express()
 
-  if (env.isProd) {
-    app.set('trust proxy', 1)
+  if (env.trustProxy) {
+    app.set('trust proxy', env.trustProxy)
   }
 
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: env.isProd
+        ? { maxAge: 31536000, includeSubDomains: true }
+        : false,
       contentSecurityPolicy: env.isProd
         ? {
-            directives: {
-              defaultSrc: ["'self'"],
-              scriptSrc: ["'self'"],
-              styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://api.fontshare.com'],
-              fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.fontshare.com', 'data:'],
-              imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
-              connectSrc: ["'self'", ...env.allowedOrigins],
-            },
-          }
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://api.fontshare.com'],
+            fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.fontshare.com', 'data:'],
+            imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+            connectSrc: ["'self'", ...env.allowedOrigins],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            frameAncestors: ["'none'"],
+            formAction: ["'self'"],
+          },
+        }
         : false,
     }),
   )
@@ -54,17 +63,20 @@ export function createApp() {
     }),
   )
 
-  app.use(express.json({ limit: '4mb' }))
-  app.use(createSessionMiddleware(env))
+  app.use(express.json({ limit: '256kb' }))
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' })
   })
 
-  app.use('/api/auth', createAuthRouter())
-  app.use('/api/uploads', createUploadRouter())
-  app.use('/api/businesses', businessRoutes)
+  // Public customer endpoints never touch admin session storage
   app.use('/api/public', publicRoutes)
+
+  const sessionMiddleware = createSessionMiddleware(env)
+  app.use('/api/auth', sessionMiddleware, createAuthRouter())
+  app.use('/api/uploads', sessionMiddleware, createUploadRouter())
+  app.use('/api/businesses', sessionMiddleware, businessRoutes)
+  app.use('/api/analytics', sessionMiddleware, analyticsRoutes)
 
   app.use(errorHandler)
 

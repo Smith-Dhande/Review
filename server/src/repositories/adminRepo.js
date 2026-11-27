@@ -36,6 +36,7 @@ export function toSafeAdmin(doc) {
     email: doc.email,
     name: doc.name,
     role: doc.role || 'Administrator',
+    emailNotifications: doc.emailNotifications ?? true,
     sessionVersion: doc.sessionVersion || 1,
   }
 }
@@ -187,4 +188,30 @@ export async function updateAdminPassword(adminId, newPasswordHash) {
   admins[idx].updatedAt = now.toISOString()
   writeLocalAdmins(admins)
   return admins[idx]
+}
+
+export async function updateAdminProfile(adminId, updates = {}) {
+  const fields = {}
+  if (typeof updates.name === 'string' && updates.name.trim()) {
+    fields.name = updates.name.trim().slice(0, 120)
+  }
+  if (typeof updates.emailNotifications === 'boolean') {
+    fields.emailNotifications = updates.emailNotifications
+  }
+
+  if (usingMongo()) {
+    const updated = await Admin.findByIdAndUpdate(
+      adminId,
+      { $set: fields },
+      { new: true },
+    ).lean()
+    return toSafeAdmin(updated)
+  }
+
+  const admins = readLocalAdmins()
+  const idx = admins.findIndex((a) => String(a.id) === String(adminId))
+  if (idx === -1) return null
+  Object.assign(admins[idx], fields, { updatedAt: new Date().toISOString() })
+  writeLocalAdmins(admins)
+  return toSafeAdmin(admins[idx])
 }

@@ -7,15 +7,24 @@ import {
   loginSchema,
 } from '../validators/authValidators.js'
 import { ensureCsrfToken } from '../middleware/csrfProtection.js'
-import { SESSION_COOKIE_NAME } from '../config/session.js'
+import { clearSessionCookie } from '../config/session.js'
+import { getEnvConfig } from '../config/environment.js'
+import { updateAdminProfile } from '../repositories/adminRepo.js'
+import { z } from 'zod'
 
 function formatZodError(error) {
   return error.issues?.[0]?.message || 'Invalid request input.'
 }
 
-export function getCsrf(req, res) {
+export function getCsrf(req, res, next) {
   const csrfToken = ensureCsrfToken(req)
-  return res.json({ csrfToken })
+  if (!req.session) {
+    return res.json({ csrfToken })
+  }
+  return req.session.save((err) => {
+    if (err) return next(err)
+    return res.json({ csrfToken })
+  })
 }
 
 export async function login(req, res, next) {
@@ -58,14 +67,15 @@ export async function login(req, res, next) {
 }
 
 export function logout(req, res, next) {
+  const env = getEnvConfig()
   if (!req.session) {
-    res.clearCookie(SESSION_COOKIE_NAME, { path: '/' })
+    clearSessionCookie(res, env)
     return res.json({ ok: true })
   }
 
   return req.session.destroy((err) => {
     if (err) return next(err)
-    res.clearCookie(SESSION_COOKIE_NAME, { path: '/' })
+    clearSessionCookie(res, env)
     return res.json({ ok: true })
   })
 }
@@ -78,9 +88,31 @@ export function getMe(req, res) {
       name: req.admin.name,
       email: req.admin.email,
       role: req.admin.role,
+      emailNotifications: req.admin.emailNotifications ?? true,
     },
     csrfToken,
   })
+}
+
+const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(120).optional(),
+  emailNotifications: z.boolean().optional(),
+})
+
+export async function updateMe(req, res, next) {
+  try {
+    const parsed = updateProfileSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ message: formatZodError(parsed.error) })
+    }
+    const updated = await updateAdminProfile(req.admin.id, parsed.data)
+    if (!updated) {
+      return res.status(404).json({ message: 'Administrator not found.' })
+    }
+    return res.json({ user: updated })
+  } catch (err) {
+    return next(err)
+  }
 }
 
 export async function changePassword(req, res, next) {

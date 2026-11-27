@@ -19,8 +19,17 @@ function tokensMatch(a, b) {
   return crypto.timingSafeEqual(bufA, bufB)
 }
 
+function extractRefererOrigin(referer) {
+  if (!referer || typeof referer !== 'string') return null
+  try {
+    return new URL(referer).origin.replace(/\/+$/, '')
+  } catch {
+    return null
+  }
+}
+
 /**
- * Synchronizer CSRF protection + Origin verification for state-changing requests.
+ * Synchronizer CSRF protection + Origin/Referer verification for state-changing requests.
  */
 export function requireCsrf(req, res, next) {
   if (SAFE_METHODS.has(req.method)) {
@@ -33,6 +42,11 @@ export function requireCsrf(req, res, next) {
     const normalized = origin.replace(/\/+$/, '')
     if (!env.allowedOrigins.includes(normalized)) {
       return res.status(403).json({ message: 'Forbidden origin.' })
+    }
+  } else if (req.headers.referer) {
+    const refOrigin = extractRefererOrigin(req.headers.referer)
+    if (!refOrigin || !env.allowedOrigins.includes(refOrigin)) {
+      return res.status(403).json({ message: 'Forbidden referer origin.' })
     }
   }
 

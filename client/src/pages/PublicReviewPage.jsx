@@ -6,6 +6,22 @@ import BusinessLogo from '../components/ui/BusinessLogo'
 import { publicReviewApi } from '../services/api'
 import { getFontStack, loadGoogleFont } from '../utils/fontLoader'
 
+function hasSessionViewed(publicId) {
+  try {
+    return sessionStorage.getItem(`rb_viewed_${publicId}`) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markSessionViewed(publicId) {
+  try {
+    sessionStorage.setItem(`rb_viewed_${publicId}`, '1')
+  } catch {
+    // Ignore private-mode storage restrictions
+  }
+}
+
 export default function PublicReviewPage() {
   const { businessId } = useParams()
 
@@ -38,10 +54,13 @@ export default function PublicReviewPage() {
         }
         setStatus('ready')
 
-        if (trackedLandingRef.current !== biz.publicId) {
+        if (
+          trackedLandingRef.current !== biz.publicId &&
+          !hasSessionViewed(biz.publicId)
+        ) {
           trackedLandingRef.current = biz.publicId
-          publicReviewApi.trackEvent(biz.publicId, 'totalScans').catch(() => {})
-          publicReviewApi.trackEvent(biz.publicId, 'landingViews').catch(() => {})
+          markSessionViewed(biz.publicId)
+          publicReviewApi.trackEvent(biz.publicId, 'landingViews').catch(() => { })
         }
       })
       .catch((err) => {
@@ -98,6 +117,7 @@ export default function PublicReviewPage() {
         <div className="w-full max-w-md bg-white border border-[#E6E4DF] rounded-lg p-8 text-center space-y-3">
           <div className="flex justify-center">
             <BusinessLogo
+              logo={business?.logo}
               logoUrl={business?.logoUrl}
               logoText={business?.logoText}
               name={business?.name}
@@ -136,7 +156,7 @@ export default function PublicReviewPage() {
           trackedRatingRef.current = true
           publicReviewApi
             .trackEvent(business.publicId, 'initialRating', { rating })
-            .catch(() => {})
+            .catch(() => { })
         }
       }}
       onFirstInteraction={() => {
@@ -144,7 +164,7 @@ export default function PublicReviewPage() {
           trackedStartRef.current = true
           publicReviewApi
             .trackEvent(business.publicId, 'questionnaireStarts')
-            .catch(() => {})
+            .catch(() => { })
         }
       }}
       onGenerateDraft={async ({ rating, answers }) => {
@@ -166,7 +186,7 @@ export default function PublicReviewPage() {
           trackedCopyRef.current = true
           publicReviewApi
             .trackEvent(business.publicId, 'copyClicks')
-            .catch(() => {})
+            .catch(() => { })
         }
       }}
       onGoogleRedirect={() => {
@@ -174,7 +194,7 @@ export default function PublicReviewPage() {
           trackedRedirectRef.current = true
           publicReviewApi
             .trackEvent(business.publicId, 'googleReviewRedirects')
-            .catch(() => {})
+            .catch(() => { })
         }
       }}
     />

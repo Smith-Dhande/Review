@@ -1,22 +1,51 @@
 import mongoose from 'mongoose'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { seedBusinesses } from './seedData.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_FILE = path.join(__dirname, '..', 'data', 'businesses.json')
+const DEFAULT_DATA_FILE = path.join(__dirname, '..', 'data', 'businesses.json')
 
 let isMongoConnected = false
 
+function getDataFile() {
+  const custom = (process.env.LOCAL_BUSINESSES_FILE || '').trim()
+  if (custom) return custom
+  if (process.env.NODE_ENV === 'test') {
+    return path.join(os.tmpdir(), 'reviewbuddy-test-businesses.json')
+  }
+  return DEFAULT_DATA_FILE
+}
+
 export async function connectDatabase() {
-  const uri = process.env.MONGODB_URI?.trim()
+  const isTest = process.env.NODE_ENV === 'test'
+  const testMongoUri = (process.env.TEST_MONGODB_URI || '').trim()
+  const prodUri = (process.env.MONGODB_URI || '').trim()
+
+  // Prevent tests from accidentally connecting to live production MongoDB Atlas
+  const uri = isTest
+    ? testMongoUri || (process.env.ALLOW_TEST_MONGO === 'true' ? prodUri : '')
+    : prodUri
 
   if (uri) {
     try {
-      await mongoose.connect(uri)
+      const rawPool = Number(process.env.MONGO_MAX_POOL_SIZE)
+      const maxPoolSize =
+        Number.isInteger(rawPool) && rawPool >= 2 && rawPool <= 25 ? rawPool : 10
+
+      await mongoose.connect(uri, {
+        maxPoolSize,
+        minPoolSize: 1,
+        serverSelectionTimeoutMS: 8000,
+        socketTimeoutMS: 20000,
+        maxIdleTimeMS: 30000,
+      })
       isMongoConnected = true
-      console.log('[DB] Connected to MongoDB Atlas')
+      if (!isTest) {
+        console.log('[DB] Connected to MongoDB Atlas')
+      }
       return true
     } catch (err) {
       console.error('[DB] MongoDB connection failed:', err.message)
@@ -24,16 +53,19 @@ export async function connectDatabase() {
     }
   }
 
-  // Local JSON fallback when MONGODB_URI is not configured yet
+  // Local JSON fallback when MONGODB_URI is not configured yet (or isolated test mode)
   isMongoConnected = false
-  const dir = path.dirname(DATA_FILE)
+  const dataFile = getDataFile()
+  const dir = path.dirname(dataFile)
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(seedBusinesses(), null, 2), 'utf-8')
+  if (!fs.existsSync(dataFile)) {
+    fs.writeFileSync(dataFile, JSON.stringify(seedBusinesses(), null, 2), 'utf-8')
   }
-  console.log('[DB] MONGODB_URI not set — using local JSON store at server/data/businesses.json')
+  if (!isTest) {
+    console.log('[DB] MONGODB_URI not set — using local JSON store at server/src/data/businesses.json')
+  }
   return false
 }
 
@@ -42,19 +74,25 @@ export function usingMongo() {
 }
 
 export function readLocalStore() {
-  if (!fs.existsSync(DATA_FILE)) {
+  const dataFile = getDataFile()
+  if (!fs.existsSync(dataFile)) {
+    const dir = path.dirname(dataFile)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
     const initial = seedBusinesses()
-    fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8')
+    fs.writeFileSync(dataFile, JSON.stringify(initial, null, 2), 'utf-8')
     return initial
   }
-  const raw = fs.readFileSync(DATA_FILE, 'utf-8')
+  const raw = fs.readFileSync(dataFile, 'utf-8')
   return JSON.parse(raw)
 }
 
 export function writeLocalStore(data) {
-  const dir = path.dirname(DATA_FILE)
+  const dataFile = getDataFile()
+  const dir = path.dirname(dataFile)
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8')
+  fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8')
 }
