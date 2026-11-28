@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
 export default function Sidebar({ collapsed, onToggle }) {
   const location = useLocation()
   const { user, logout } = useAuth()
+  const { showToast } = useToast()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
 
@@ -123,9 +125,14 @@ export default function Sidebar({ collapsed, onToggle }) {
               <div className="border-t border-border my-1" />
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setMenuOpen(false)
-                  logout()
+                  await logout()
+                  showToast({
+                    type: 'info',
+                    title: 'Signed out',
+                    message: 'You have been signed out.',
+                  })
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-surface cursor-pointer transition-colors duration-150"
               >

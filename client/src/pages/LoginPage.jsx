@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import Input from '../components/ui/Input'
 import PasswordInput from '../components/ui/PasswordInput'
 import Button from '../components/ui/Button'
@@ -8,6 +9,7 @@ import Button from '../components/ui/Button'
 export default function LoginPage() {
   const navigate = useNavigate()
   const { login, isLoading, error, clearError } = useAuth()
+  const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState('')
@@ -22,7 +24,18 @@ export default function LoginPage() {
     }
     const success = await login(trimmedEmail, password)
     if (success) {
+      showToast({
+        type: 'success',
+        title: 'Signed in',
+        message: 'Welcome back to ReviewBuddy.',
+      })
       navigate('/dashboard', { replace: true })
+    } else {
+      showToast({
+        type: 'error',
+        title: 'Sign in failed',
+        message: 'Invalid email or password.',
+      })
     }
   }
 

@@ -5,10 +5,12 @@ import Input from '../components/ui/Input'
 import PasswordInput from '../components/ui/PasswordInput'
 import Button from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { businessesApi } from '../services/api'
 
 export default function SettingsPage() {
   const { user, updateProfile, changePassword } = useAuth()
+  const { showToast } = useToast()
 
   const [fullName, setFullName] = useState(user?.name || '')
   const [profileLoading, setProfileLoading] = useState(false)
@@ -37,9 +39,16 @@ export default function SettingsPage() {
     try {
       await updateProfile({ name: fullName.trim() })
       setProfileMessage('Profile updated.')
+      showToast({
+        type: 'success',
+        title: 'Settings saved',
+        message: 'Administrator profile updated successfully.',
+      })
       setTimeout(() => setProfileMessage(''), 2500)
     } catch (err) {
-      setProfileError(err.message || 'Could not update profile.')
+      const msg = err.message || 'Could not update profile.'
+      setProfileError(msg)
+      showToast({ type: 'error', title: 'Failed to save settings', message: msg })
     } finally {
       setProfileLoading(false)
     }
@@ -59,8 +68,15 @@ export default function SettingsPage() {
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
+      showToast({
+        type: 'success',
+        title: 'Export downloaded',
+        message: 'Business records exported as JSON.',
+      })
     } catch (err) {
-      setExportError(err.message || 'Could not export business records.')
+      const msg = err.message || 'Could not export business records.'
+      setExportError(msg)
+      showToast({ type: 'error', title: 'Export failed', message: msg })
     } finally {
       setExporting(false)
     }
@@ -84,11 +100,18 @@ export default function SettingsPage() {
         confirmPassword,
       })
       setPasswordSuccess(res.message || 'Password updated successfully.')
+      showToast({
+        type: 'success',
+        title: 'Password updated',
+        message: res.message || 'Password updated successfully.',
+      })
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPasswordError(err.message || 'Could not update password.')
+      const msg = err.message || 'Could not update password.'
+      setPasswordError(msg)
+      showToast({ type: 'error', title: 'Password update failed', message: msg })
     } finally {
       setPasswordLoading(false)
     }

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import Button from '../../../components/ui/Button'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
+import { useToast } from '../../../context/ToastContext'
 import StatusText from '../../../components/ui/StatusText'
 import EmptyState from '../../../components/ui/EmptyState'
 import ChartCard from '../../../components/ui/ChartCard'
@@ -31,6 +33,7 @@ const DATE_RANGES = [
 export default function DigitalCardDetailsPage() {
   const { cardId } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [card, setCard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -127,41 +130,76 @@ export default function DigitalCardDetailsPage() {
     try {
       await navigator.clipboard.writeText(publicUrl)
       setCopied(true)
+      showToast({
+        type: 'info',
+        title: 'Public URL copied',
+        message: 'Digital card link copied to clipboard.',
+      })
       setTimeout(() => setCopied(false), 1800)
     } catch {
-      // Ignore
+      showToast({
+        type: 'warning',
+        title: 'Copy failed',
+        message: 'Could not access clipboard.',
+      })
     }
   }
 
   const handleDownloadPng = async () => {
-    const dataUrl = await QRCode.toDataURL(publicUrl, {
-      width: 1024,
-      margin: 2,
-      errorCorrectionLevel: 'M',
-    })
-    const a = document.createElement('a')
-    a.href = dataUrl
-    a.download = `${card.slug}-card-qr.png`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    try {
+      const dataUrl = await QRCode.toDataURL(publicUrl, {
+        width: 1024,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${card.slug}-card-qr.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      showToast({
+        type: 'success',
+        title: 'QR PNG downloaded',
+        message: `${card.slug}-card-qr.png saved.`,
+      })
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'QR download failed',
+        message: 'Could not generate QR PNG.',
+      })
+    }
   }
 
   const handleDownloadSvg = async () => {
-    const svg = await QRCode.toString(publicUrl, {
-      type: 'svg',
-      margin: 2,
-      errorCorrectionLevel: 'M',
-    })
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${card.slug}-card-qr.svg`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    try {
+      const svg = await QRCode.toString(publicUrl, {
+        type: 'svg',
+        margin: 2,
+        errorCorrectionLevel: 'M',
+      })
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${card.slug}-card-qr.svg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast({
+        type: 'success',
+        title: 'QR SVG downloaded',
+        message: `${card.slug}-card-qr.svg saved.`,
+      })
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'QR download failed',
+        message: 'Could not generate QR SVG.',
+      })
+    }
   }
 
   const handlePrintVisitingCard = async () => {
@@ -172,7 +210,19 @@ export default function DigitalCardDetailsPage() {
         errorCorrectionLevel: 'M',
       })
       const w = window.open('', '_blank', 'width=560,height=420')
-      if (!w) return
+      if (!w) {
+        showToast({
+          type: 'warning',
+          title: 'Popup blocked',
+          message: 'Please allow popups to print the visiting card.',
+        })
+        return
+      }
+      showToast({
+        type: 'info',
+        title: 'Printable visiting card ready',
+        message: 'Print dialog opened.',
+      })
       const doc = w.document
       doc.open()
       doc.write(`<!doctype html><html><head><title></title><style>
@@ -254,8 +304,15 @@ export default function DigitalCardDetailsPage() {
                 const next = card.status === 'active' ? 'paused' : 'active'
                 const res = await digitalCardsApi.updateStatus(card.slug, next)
                 setCard(res.card)
+                showToast({
+                  type: 'success',
+                  title: next === 'active' ? 'Card activated' : 'Card paused',
+                  message: `${p.fullName || card.name} is now ${next}.`,
+                })
               } catch (err) {
-                setError(err.message || 'Could not update status.')
+                const msg = err.message || 'Could not update status.'
+                setError(msg)
+                showToast({ type: 'error', title: 'Status update failed', message: msg })
               } finally {
                 setBusy(false)
               }
@@ -271,9 +328,16 @@ export default function DigitalCardDetailsPage() {
               setBusy(true)
               try {
                 const res = await digitalCardsApi.duplicate(card.slug)
+                showToast({
+                  type: 'success',
+                  title: 'Card duplicated',
+                  message: `Created a paused copy: ${res.card.name}.`,
+                })
                 navigate(`/digital-cards/${res.card.slug}`)
               } catch (err) {
-                setError(err.message || 'Could not duplicate card.')
+                const msg = err.message || 'Could not duplicate card.'
+                setError(msg)
+                showToast({ type: 'error', title: 'Duplicate failed', message: msg })
               } finally {
                 setBusy(false)
               }
@@ -282,44 +346,14 @@ export default function DigitalCardDetailsPage() {
             <CopyPlus className="w-3.5 h-3.5" />
             Duplicate
           </Button>
-          {!confirmDelete ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setConfirmDelete(true)}
-              aria-label="Delete Card"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-error" />
-            </Button>
-          ) : (
-            <div className="inline-flex items-center gap-1.5">
-              <Button
-                variant="danger"
-                size="sm"
-                loading={busy}
-                onClick={async () => {
-                  setBusy(true)
-                  try {
-                    await digitalCardsApi.remove(card.slug)
-                    navigate('/digital-cards', { replace: true })
-                  } catch (err) {
-                    setError(err.message || 'Could not delete card.')
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              >
-                Confirm Delete
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Delete Card"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-error" />
+          </Button>
         </div>
       </div>
 
@@ -479,6 +513,34 @@ export default function DigitalCardDetailsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete "${p.fullName || card.name}"?`}
+        description="This will permanently delete this digital card, disable its public QR/NFC link, and remove all associated visit and click analytics. This action cannot be undone."
+        confirmLabel="Delete Card"
+        loading={busy}
+        onConfirm={async () => {
+          setBusy(true)
+          try {
+            await digitalCardsApi.remove(card.slug)
+            showToast({
+              type: 'success',
+              title: 'Card deleted successfully',
+              message: `${p.fullName || card.name} was permanently removed.`,
+            })
+            navigate('/digital-cards', { replace: true })
+          } catch (err) {
+            const msg = err.message || 'Could not delete card.'
+            setError(msg)
+            showToast({ type: 'error', title: 'Delete failed', message: msg })
+            setConfirmDelete(false)
+          } finally {
+            setBusy(false)
+          }
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }

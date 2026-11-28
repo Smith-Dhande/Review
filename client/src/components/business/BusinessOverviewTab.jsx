@@ -9,6 +9,7 @@ import BusinessLogo from '../ui/BusinessLogo'
 import LogoUpload from '../ui/LogoUpload'
 import QrPreviewSvg from './QrPreviewSvg'
 import { getPublicReviewUrl } from '../../context/BusinessesContext'
+import { useToast } from '../../context/ToastContext'
 import { businessesApi } from '../../services/api'
 import { businessCategories } from '../../utils/businessOptions'
 
@@ -30,6 +31,7 @@ export default function BusinessOverviewTab({
   onCancelEdit,
   onSaveEdit,
 }) {
+  const { showToast } = useToast()
   const [formData, setFormData] = useState(() => buildInitialForm(business))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -99,9 +101,18 @@ export default function BusinessOverviewTab({
     try {
       await navigator.clipboard.writeText(publicUrl)
       setCopied(true)
+      showToast({
+        type: 'info',
+        title: 'Review link copied',
+        message: 'Public review URL copied to clipboard.',
+      })
       setTimeout(() => setCopied(false), 1800)
     } catch {
-      // Clipboard fallback ignored
+      showToast({
+        type: 'warning',
+        title: 'Copy failed',
+        message: 'Could not access clipboard.',
+      })
     }
   }
 
@@ -119,8 +130,15 @@ export default function BusinessOverviewTab({
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
+      showToast({
+        type: 'success',
+        title: 'QR code downloaded',
+        message: `${fileSlug}-review-qr.${format} saved.`,
+      })
     } catch (err) {
-      setQrError(err.message || `Could not download QR ${format.toUpperCase()}.`)
+      const msg = err.message || `Could not download QR ${format.toUpperCase()}.`
+      setQrError(msg)
+      showToast({ type: 'error', title: 'QR download failed', message: msg })
     } finally {
       setQrDownloading('')
     }
@@ -137,9 +155,16 @@ export default function BusinessOverviewTab({
       })
       const win = window.open('', '_blank', 'width=560,height=720')
       if (!win) {
-        setQrError('Please allow popups to open the printable QR card.')
+        const msg = 'Please allow popups to open the printable QR card.'
+        setQrError(msg)
+        showToast({ type: 'warning', title: 'Popup blocked', message: msg })
         return
       }
+      showToast({
+        type: 'info',
+        title: 'Printable QR card ready',
+        message: 'Print dialog opened.',
+      })
       const safeName = String(business.name || 'ReviewBuddy').replace(
         /[&<>"']/g,
         (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]),

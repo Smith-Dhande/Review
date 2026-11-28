@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { Loader2, Trash2, Upload } from 'lucide-react'
 import { businessesApi } from '../../services/api'
+import { useToast } from '../../context/ToastContext'
 
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 
 export default function LogoUpload({ value, onChange, onTempUploaded }) {
+  const { showToast } = useToast()
   const inputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -16,12 +18,16 @@ export default function LogoUpload({ value, onChange, onTempUploaded }) {
     setError('')
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      setError('Please upload a PNG, JPG, JPEG, or WebP image.')
+      const msg = 'Please upload a PNG, JPG, JPEG, or WebP image.'
+      setError(msg)
+      showToast({ type: 'warning', title: 'Unsupported file type', message: msg })
       return
     }
 
     if (file.size > MAX_BYTES) {
-      setError('Image size must be 5 MB or less.')
+      const msg = 'Image size must be 5 MB or less.'
+      setError(msg)
+      showToast({ type: 'warning', title: 'File too large', message: msg })
       return
     }
 
@@ -32,8 +38,15 @@ export default function LogoUpload({ value, onChange, onTempUploaded }) {
         onTempUploaded?.(res.logo.publicId)
       }
       onChange(res.logo)
+      showToast({
+        type: 'success',
+        title: 'Logo uploaded',
+        message: 'Business logo uploaded successfully.',
+      })
     } catch (err) {
-      setError(err.message || 'Failed to upload logo.')
+      const msg = err.message || 'Failed to upload logo.'
+      setError(msg)
+      showToast({ type: 'error', title: 'Logo upload failed', message: msg })
     } finally {
       setUploading(false)
     }

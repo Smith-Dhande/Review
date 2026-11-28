@@ -15,11 +15,14 @@ import PageHeader from '../../../components/ui/PageHeader'
 import DataTable from '../../../components/ui/DataTable'
 import StatusText from '../../../components/ui/StatusText'
 import Button from '../../../components/ui/Button'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
+import { useToast } from '../../../context/ToastContext'
 import { digitalCardsApi } from '../services/digitalCardsApi'
 import { getDigitalCardPublicUrl } from '../constants/presets'
 
 export default function DigitalCardsPage() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [cards, setCards] = useState([])
   const [counts, setCounts] = useState({ all: 0, active: 0, paused: 0 })
   const [pagination, setPagination] = useState({
@@ -39,7 +42,7 @@ export default function DigitalCardsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
 
   const loadData = useCallback(async () => {
@@ -78,9 +81,18 @@ export default function DigitalCardsPage() {
     try {
       await navigator.clipboard.writeText(getDigitalCardPublicUrl(card))
       setCopiedId(card.slug)
+      showToast({
+        type: 'info',
+        title: 'Public URL copied',
+        message: 'Digital card link copied to clipboard.',
+      })
       setTimeout(() => setCopiedId(null), 1800)
     } catch {
-      // Ignore clipboard failure
+      showToast({
+        type: 'warning',
+        title: 'Copy failed',
+        message: 'Could not access clipboard.',
+      })
     }
   }
 
@@ -99,8 +111,17 @@ export default function DigitalCardsPage() {
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
+      showToast({
+        type: 'success',
+        title: 'QR code downloaded',
+        message: `${card.slug}-card-qr.png saved.`,
+      })
     } catch {
-      // Ignore QR error
+      showToast({
+        type: 'error',
+        title: 'QR download failed',
+        message: 'Could not generate QR code.',
+      })
     }
   }
 
@@ -113,8 +134,15 @@ export default function DigitalCardsPage() {
       const next = card.status === 'active' ? 'paused' : 'active'
       await digitalCardsApi.updateStatus(card.slug, next)
       await loadData()
+      showToast({
+        type: 'success',
+        title: next === 'active' ? 'Card activated' : 'Card paused',
+        message: `${card.name} is now ${next}.`,
+      })
     } catch (err) {
-      setError(err.message || 'Could not update card status.')
+      const msg = err.message || 'Could not update card status.'
+      setError(msg)
+      showToast({ type: 'error', title: 'Status update failed', message: msg })
     } finally {
       setBusyId(null)
     }
@@ -128,24 +156,39 @@ export default function DigitalCardsPage() {
     try {
       await digitalCardsApi.duplicate(card.slug)
       await loadData()
+      showToast({
+        type: 'success',
+        title: 'Card duplicated',
+        message: `Created a paused copy of ${card.name}.`,
+      })
     } catch (err) {
-      setError(err.message || 'Could not duplicate card.')
+      const msg = err.message || 'Could not duplicate card.'
+      setError(msg)
+      showToast({ type: 'error', title: 'Duplicate failed', message: msg })
     } finally {
       setBusyId(null)
     }
   }
 
-  const handleDelete = async (e, slug) => {
-    e.stopPropagation()
-    if (busyId) return
+  const handleDelete = async () => {
+    if (!deleteTarget || busyId) return
+    const { slug, name } = deleteTarget
     setBusyId(slug)
     setError('')
     try {
       await digitalCardsApi.remove(slug)
-      setConfirmDeleteId(null)
+      setDeleteTarget(null)
       await loadData()
+      showToast({
+        type: 'success',
+        title: 'Card deleted successfully',
+        message: `${name} was permanently removed.`,
+      })
     } catch (err) {
-      setError(err.message || 'Could not delete card.')
+      const msg = err.message || 'Could not delete card.'
+      setError(msg)
+      showToast({ type: 'error', title: 'Delete failed', message: msg })
+      setDeleteTarget(null)
     } finally {
       setBusyId(null)
     }
@@ -278,34 +321,14 @@ export default function DigitalCardsPage() {
                 ? 'Pause'
                 : 'Activate'}
           </button>
-          {confirmDeleteId !== row.slug ? (
-            <button
-              type="button"
-              onClick={() => setConfirmDeleteId(row.slug)}
-              aria-label={`Delete ${row.name}`}
-              className="p-1.5 text-xs rounded-md border border-border bg-white text-error hover:bg-error-light cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <div className="inline-flex items-center gap-1">
-              <button
-                type="button"
-                disabled={busyId === row.slug}
-                onClick={(e) => handleDelete(e, row.slug)}
-                className="px-2 py-1 text-xs font-medium rounded-md bg-error text-white cursor-pointer"
-              >
-                Confirm
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteId(null)}
-                className="px-2 py-1 text-xs text-text-secondary cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setDeleteTarget({ slug: row.slug, name: row.name })}
+            aria-label={`Delete ${row.name}`}
+            className="p-1.5 text-xs rounded-md border border-border bg-white text-error hover:bg-error-light cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       ),
     },
@@ -508,6 +531,16 @@ export default function DigitalCardsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget ? `Delete "${deleteTarget.name}"?` : 'Delete card?'}
+        description="This will permanently delete the digital card, disable its public QR/NFC link, and remove all associated visit and click analytics. This action cannot be undone."
+        confirmLabel="Delete Card"
+        loading={Boolean(deleteTarget && busyId === deleteTarget.slug)}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

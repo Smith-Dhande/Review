@@ -10,6 +10,7 @@ import Input from '../components/ui/Input'
 import BusinessLogo from '../components/ui/BusinessLogo'
 import LogoUpload from '../components/ui/LogoUpload'
 import { useBusinesses } from '../context/BusinessesContext'
+import { useToast } from '../context/ToastContext'
 import { businessesApi } from '../services/api'
 import { businessCategories } from '../utils/businessOptions'
 import { normalizeGoogleReviewInput } from '../utils/googleReview'
@@ -38,6 +39,7 @@ const initialFormState = {
 
 export default function BusinessesPage() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const {
     businesses,
     pagination,
@@ -133,8 +135,16 @@ export default function BusinessesPage() {
     setTogglingId(targetId)
     try {
       await toggleBusinessStatus(targetId, row.status)
+      const nextStatus = row.status === 'active' ? 'paused' : 'active'
+      showToast({
+        type: 'success',
+        title: nextStatus === 'active' ? 'Business activated' : 'Business paused',
+        message: `${row.name} is now ${nextStatus}.`,
+      })
     } catch (err) {
-      setStatusError(err.message || 'Could not update business status.')
+      const msg = err.message || 'Could not update business status.'
+      setStatusError(msg)
+      showToast({ type: 'error', title: 'Status update failed', message: msg })
     } finally {
       setTogglingId(null)
     }
@@ -196,11 +206,20 @@ export default function BusinessesPage() {
         })
       }
       await cleanupUnsavedTempLogos(formData.logo?.publicId || '')
+      showToast({
+        type: 'success',
+        title: editingId ? 'Business updated' : 'Business created',
+        message: editingId
+          ? `${formData.name.trim()} updated successfully.`
+          : `${formData.name.trim()} created successfully.`,
+      })
       setIsPanelOpen(false)
       setEditingId(null)
       setFormData(initialFormState)
     } catch (err) {
-      setFormError(err.message || 'Could not save business')
+      const msg = err.message || 'Could not save business'
+      setFormError(msg)
+      showToast({ type: 'error', title: 'Failed to save business', message: msg })
     } finally {
       setIsSaving(false)
     }

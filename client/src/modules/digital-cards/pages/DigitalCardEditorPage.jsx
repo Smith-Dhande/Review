@@ -26,6 +26,7 @@ import Input from '../../../components/ui/Input'
 import DigitalCardRenderer from '../templates/DigitalCardRenderer'
 import CardAssetUpload from '../components/CardAssetUpload'
 import { digitalCardsApi } from '../services/digitalCardsApi'
+import { useToast } from '../../../context/ToastContext'
 import {
   CARD_FONTS,
   CARD_TEMPLATES,
@@ -53,6 +54,7 @@ export default function DigitalCardEditorPage() {
   const { cardId } = useParams()
   const isNew = !cardId
   const navigate = useNavigate()
+  const { showToast } = useToast()
 
   const [card, setCard] = useState(() => createDefaultCardPayload(''))
   const [activeTab, setActiveTab] = useState('identity')
@@ -170,14 +172,21 @@ export default function DigitalCardEditorPage() {
     const tpl =
       CARD_TEMPLATES.find((t) => t.id === card.templateId) || CARD_TEMPLATES[0]
     updateAppearance(tpl.defaults)
+    showToast({
+      type: 'info',
+      title: 'Template defaults applied',
+      message: 'Save changes to persist your reset.',
+    })
   }
 
   const handleSave = async (e) => {
     e?.preventDefault()
     if (saving) return
     if (!card.name?.trim()) {
-      setSaveError('Card name is required.')
+      const msg = 'Card name is required.'
+      setSaveError(msg)
       setActiveTab('identity')
+      showToast({ type: 'warning', title: 'Missing required field', message: msg })
       return
     }
     setSaving(true)
@@ -198,16 +207,28 @@ export default function DigitalCardEditorPage() {
       if (isNew) {
         const res = await digitalCardsApi.create(payload)
         setDirty(false)
+        showToast({
+          type: 'success',
+          title: 'Card created successfully',
+          message: `${res.card.name} is ready.`,
+        })
         navigate(`/digital-cards/${res.card.slug}/edit`, { replace: true })
       } else {
         const res = await digitalCardsApi.update(card.slug, payload)
         setCard((prev) => ({ ...prev, ...res.card }))
         setDirty(false)
         setSaveNotice('Changes saved')
+        showToast({
+          type: 'success',
+          title: 'Digital card updated',
+          message: 'All customization and card details saved.',
+        })
         setTimeout(() => setSaveNotice(''), 2500)
       }
     } catch (err) {
-      setSaveError(err.message || 'Could not save digital card.')
+      const msg = err.message || 'Could not save digital card.'
+      setSaveError(msg)
+      showToast({ type: 'error', title: 'Failed to save changes', message: msg })
     } finally {
       setSaving(false)
     }

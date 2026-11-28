@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2, PauseCircle } from 'lucide-react'
 import { digitalCardsApi } from '../services/digitalCardsApi'
+import { useToast } from '../../../context/ToastContext'
 import DigitalCardRenderer from '../templates/DigitalCardRenderer'
 
 export default function PublicDigitalCardPage() {
   const { slug } = useParams()
+  const { showToast } = useToast()
   const [card, setCard] = useState(null)
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'paused' | 'not_found' | 'error'
   const [errorMessage, setErrorMessage] = useState('')
@@ -123,6 +125,11 @@ export default function PublicDigitalCardPage() {
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
+        showToast({
+          type: 'success',
+          title: 'Contact file downloaded',
+          message: `Open ${card.slug}.vcf to save contact.`,
+        })
       }}
     />
   )

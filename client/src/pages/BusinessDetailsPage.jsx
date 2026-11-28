@@ -12,6 +12,8 @@ import QuestionnaireTab from '../components/business/QuestionnaireTab'
 import LandingPageAppearanceTab from '../components/business/LandingPageAppearanceTab'
 import BusinessAnalyticsTab from '../components/business/BusinessAnalyticsTab'
 import { useBusinesses } from '../context/BusinessesContext'
+import { useToast } from '../context/ToastContext'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { businessesApi } from '../services/api'
 
 const TABS = [
@@ -25,6 +27,7 @@ const TABS = [
 export default function BusinessDetailsPage() {
   const { businessId } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const {
     businesses,
     updateBusiness,
@@ -137,6 +140,11 @@ export default function BusinessDetailsPage() {
     const updated = await updateBusiness(targetId, updates)
     setFetchedBusiness(updated)
     setIsEditing(false)
+    showToast({
+      type: 'success',
+      title: 'Business updated',
+      message: `${updated?.name || business.name} updated successfully.`,
+    })
     return updated
   }
 
@@ -147,8 +155,16 @@ export default function BusinessDetailsPage() {
     try {
       const updated = await toggleBusinessStatus(targetId, business.status)
       if (updated) setFetchedBusiness(updated)
+      const nextStatus = business.status === 'active' ? 'paused' : 'active'
+      showToast({
+        type: 'success',
+        title: nextStatus === 'active' ? 'Business activated' : 'Business paused',
+        message: `${business.name} is now ${nextStatus}.`,
+      })
     } catch (err) {
-      setActionError(err.message || 'Could not update business status.')
+      const msg = err.message || 'Could not update business status.'
+      setActionError(msg)
+      showToast({ type: 'error', title: 'Status update failed', message: msg })
     } finally {
       setStatusLoading(false)
     }
@@ -160,9 +176,16 @@ export default function BusinessDetailsPage() {
     setDeleting(true)
     try {
       await deleteBusiness(targetId)
+      showToast({
+        type: 'success',
+        title: 'Business deleted',
+        message: `${business.name} was permanently deleted.`,
+      })
       navigate('/businesses', { replace: true })
     } catch (err) {
-      setActionError(err.message || 'Could not delete business.')
+      const msg = err.message || 'Could not delete business.'
+      setActionError(msg)
+      showToast({ type: 'error', title: 'Delete failed', message: msg })
       setConfirmDelete(false)
     } finally {
       setDeleting(false)
@@ -232,35 +255,14 @@ export default function BusinessDetailsPage() {
               ? 'Pause Business'
               : 'Activate Business'}
           </Button>
-          {!confirmDelete ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setConfirmDelete(true)}
-              aria-label="Delete Business"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-error" />
-            </Button>
-          ) : (
-            <div className="inline-flex items-center gap-1.5">
-              <Button
-                variant="danger"
-                size="sm"
-                loading={deleting}
-                onClick={handleDelete}
-              >
-                Confirm Delete
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={deleting}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Delete Business"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-error" />
+          </Button>
         </div>
       </div>
 
@@ -326,13 +328,27 @@ export default function BusinessDetailsPage() {
           <QuestionnaireTab
             questions={business.questions}
             onChange={async (updater) => {
-              const updated = await setQuestions(
-                targetId,
-                updater,
-                business.questions || [],
-              )
-              if (updated) setFetchedBusiness(updated)
-              return updated
+              try {
+                const updated = await setQuestions(
+                  targetId,
+                  updater,
+                  business.questions || [],
+                )
+                if (updated) setFetchedBusiness(updated)
+                showToast({
+                  type: 'success',
+                  title: 'Questionnaire saved',
+                  message: 'Review questions updated successfully.',
+                })
+                return updated
+              } catch (err) {
+                showToast({
+                  type: 'error',
+                  title: 'Failed to save questionnaire',
+                  message: err.message || 'Could not update questionnaire.',
+                })
+                throw err
+              }
             }}
           />
         )}
@@ -342,9 +358,23 @@ export default function BusinessDetailsPage() {
             key={targetId}
             business={business}
             onSave={async (cfg) => {
-              const updated = await updateReviewConfig(targetId, cfg)
-              if (updated) setFetchedBusiness(updated)
-              return updated
+              try {
+                const updated = await updateReviewConfig(targetId, cfg)
+                if (updated) setFetchedBusiness(updated)
+                showToast({
+                  type: 'success',
+                  title: 'Configuration saved',
+                  message: 'Review configuration updated successfully.',
+                })
+                return updated
+              } catch (err) {
+                showToast({
+                  type: 'error',
+                  title: 'Save failed',
+                  message: err.message || 'Could not save review configuration.',
+                })
+                throw err
+              }
             }}
           />
         )}
@@ -354,9 +384,23 @@ export default function BusinessDetailsPage() {
             key={targetId}
             business={business}
             onSave={async (appCfg) => {
-              const updated = await updateAppearance(targetId, appCfg)
-              if (updated) setFetchedBusiness(updated)
-              return updated
+              try {
+                const updated = await updateAppearance(targetId, appCfg)
+                if (updated) setFetchedBusiness(updated)
+                showToast({
+                  type: 'success',
+                  title: 'Appearance saved',
+                  message: 'Landing page appearance updated successfully.',
+                })
+                return updated
+              } catch (err) {
+                showToast({
+                  type: 'error',
+                  title: 'Save failed',
+                  message: err.message || 'Could not save appearance settings.',
+                })
+                throw err
+              }
             }}
           />
         )}
@@ -365,6 +409,16 @@ export default function BusinessDetailsPage() {
           <BusinessAnalyticsTab business={business} />
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete "${business.name}"?`}
+        description="This will permanently delete this business, its custom questionnaire, review configuration, and all associated review analytics. This action cannot be undone."
+        confirmLabel="Delete Business"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }

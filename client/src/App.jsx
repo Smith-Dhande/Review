@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { BusinessesProvider } from './context/BusinessesContext'
+import { ToastProvider } from './context/ToastContext'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoadingState from './components/ui/LoadingState'
@@ -43,8 +44,9 @@ export default function App() {
   const { user } = useAuth()
 
   return (
-    <BusinessesProvider>
-      <Suspense
+    <ToastProvider>
+      <BusinessesProvider>
+        <Suspense
         fallback={
           <div className="min-h-screen bg-bg flex items-center justify-center">
             <LoadingState message="Loading..." />
@@ -88,5 +90,6 @@ export default function App() {
         </Routes>
       </Suspense>
     </BusinessesProvider>
+    </ToastProvider>
   )
 }

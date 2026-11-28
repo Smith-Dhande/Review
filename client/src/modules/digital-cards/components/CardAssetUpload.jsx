@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
 import { Loader2, Trash2, Upload } from 'lucide-react'
 import { digitalCardsApi } from '../services/digitalCardsApi'
+import { useToast } from '../../../context/ToastContext'
 
 export default function CardAssetUpload({ label, value, onChange, hint }) {
+  const { showToast } = useToast()
   const inputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -15,8 +17,15 @@ export default function CardAssetUpload({ label, value, onChange, hint }) {
     try {
       const res = await digitalCardsApi.uploadAsset(file)
       onChange(res.logo)
+      showToast({
+        type: 'success',
+        title: 'Image uploaded',
+        message: `${label} uploaded successfully.`,
+      })
     } catch (err) {
-      setError(err.message || 'Image upload failed.')
+      const msg = err.message || 'Image upload failed.'
+      setError(msg)
+      showToast({ type: 'error', title: 'Image upload failed', message: msg })
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -26,6 +35,11 @@ export default function CardAssetUpload({ label, value, onChange, hint }) {
   const handleRemove = async () => {
     const publicId = value?.publicId
     onChange(null)
+    showToast({
+      type: 'info',
+      title: 'Image removed',
+      message: `${label} removed. Save changes to apply.`,
+    })
     if (publicId) {
       digitalCardsApi.cleanupAsset(publicId).catch(() => {})
     }
