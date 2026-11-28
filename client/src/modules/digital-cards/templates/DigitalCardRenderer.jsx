@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
 import {
-  Briefcase,
-  Building2,
   Download,
-  ExternalLink,
   Globe,
   Mail,
   MapPin,
   MessageCircle,
   Phone,
-  Share2,
 } from 'lucide-react'
 import { getCardFontStack, loadCardFonts } from '../constants/presets'
+import { getTemplateTheme } from './templateThemes'
+import CardHeroHeader from '../components/CardHeroHeader'
+import CardActionButtons from '../components/CardActionButtons'
+import CardSocialLinks from '../components/CardSocialLinks'
+import CardCustomSections from '../components/CardCustomSections'
 
 function safeHref(url) {
   const s = String(url || '').trim()
@@ -25,24 +26,10 @@ function buildWhatsAppHref(number, message) {
   return `https://wa.me/${digits}${text}`
 }
 
-const HEADING_SIZES = {
-  sm: 'text-xl',
-  md: 'text-2xl',
-  lg: 'text-[26px]',
-  xl: 'text-3xl',
-}
-
 const BODY_SIZES = {
   sm: 'text-xs',
   md: 'text-sm',
   lg: 'text-base',
-}
-
-const FONT_WEIGHTS = {
-  normal: 'font-normal',
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
 }
 
 const LINE_HEIGHTS = {
@@ -65,36 +52,6 @@ const RADIUS_CLASSES = {
   xl: 'rounded-3xl',
 }
 
-const BTN_SHAPES = {
-  rounded: 'rounded-lg',
-  pill: 'rounded-full',
-  square: 'rounded-none',
-}
-
-const BTN_SIZES = {
-  sm: 'py-2 px-3 text-xs',
-  md: 'py-2.5 px-4 text-sm',
-  lg: 'py-3 px-5 text-base',
-}
-
-const AVATAR_SIZES = {
-  sm: 'w-20 h-20',
-  md: 'w-24 h-24',
-  lg: 'w-28 h-28',
-}
-
-const AVATAR_SHAPES = {
-  circle: 'rounded-full',
-  rounded: 'rounded-2xl',
-  square: 'rounded-md',
-}
-
-const BANNER_HEIGHTS = {
-  sm: 'h-24',
-  md: 'h-36',
-  lg: 'h-48',
-}
-
 const CARD_WIDTHS = {
   narrow: 'max-w-[380px]',
   standard: 'max-w-[460px]',
@@ -102,12 +59,13 @@ const CARD_WIDTHS = {
 }
 
 const SECTION_SPACING = {
-  compact: 'space-y-3',
+  compact: 'space-y-4',
   comfortable: 'space-y-5',
   spacious: 'space-y-7',
 }
 
-function getBackdropStyle(a) {
+function getBackdropStyle(a, theme) {
+  const overlay = theme.backdropOverlay ? theme.backdropOverlay(a) : {}
   if (a.backgroundType === 'image' && safeHref(a.backgroundImage?.url)) {
     return {
       backgroundColor: a.backgroundColor,
@@ -146,7 +104,7 @@ function getBackdropStyle(a) {
       }
     }
   }
-  return { backgroundColor: a.backgroundColor }
+  return { backgroundColor: a.backgroundColor, ...overlay }
 }
 
 export default function DigitalCardRenderer({
@@ -161,18 +119,20 @@ export default function DigitalCardRenderer({
   const c = card?.contactInformation || {}
   const v = card?.visibilitySettings || {}
   const templateId = card?.templateId || 'minimal-white'
+  const theme = getTemplateTheme(templateId)
 
   useEffect(() => {
     loadCardFonts([a.headingFont, a.bodyFont, a.buttonFont])
   }, [a.headingFont, a.bodyFont, a.buttonFont])
 
   const displayName = p.fullName || card?.name || 'Digital Card'
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('') || 'DC'
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('') || 'DC'
 
   const headingStyle = { fontFamily: getCardFontStack(a.headingFont) }
   const bodyStyle = { fontFamily: getCardFontStack(a.bodyFont) }
@@ -181,17 +141,17 @@ export default function DigitalCardRenderer({
   const isCentered =
     templateId === 'corporate-professional' ||
     templateId === 'creative-portfolio' ||
-    templateId === 'bold-modern'
+    templateId === 'bold-modern' ||
+    templateId === 'minimal-white'
       ? a.textAlign === 'center'
       : a.textAlign !== 'left'
 
   const radiusCls = RADIUS_CLASSES[a.borderRadius || 'lg'] || 'rounded-2xl'
-  const btnShapeCls = BTN_SHAPES[a.buttonShape || 'rounded'] || 'rounded-lg'
-  const btnSizeCls = BTN_SIZES[a.buttonSize || 'md'] || 'py-2.5 px-4 text-sm'
   const spacingCls = SECTION_SPACING[a.sectionSpacing || 'comfortable'] || 'space-y-5'
-  const widthCls = isPreview && previewDevice === 'mobile'
-    ? 'max-w-[360px]'
-    : CARD_WIDTHS[a.cardWidth || 'standard'] || 'max-w-[460px]'
+  const widthCls =
+    isPreview && previewDevice === 'mobile'
+      ? 'max-w-[360px]'
+      : CARD_WIDTHS[a.cardWidth || 'standard'] || 'max-w-[460px]'
 
   const dividerBorder =
     a.dividerStyle === 'none'
@@ -199,33 +159,6 @@ export default function DigitalCardRenderer({
       : a.dividerStyle === 'line'
         ? 'border-current/20'
         : 'border-current/10'
-
-  const getButtonStyleObj = (isPrimary = false) => {
-    if (a.buttonStyle === 'outlined') {
-      return {
-        ...buttonFontStyle,
-        backgroundColor: 'transparent',
-        color: a.buttonBgColor || a.primaryColor,
-        border: `1.5px solid ${a.buttonBgColor || a.primaryColor}`,
-      }
-    }
-    if (a.buttonStyle === 'soft') {
-      return {
-        ...buttonFontStyle,
-        backgroundColor: `${a.buttonBgColor || a.primaryColor}1A`,
-        color: a.buttonBgColor || a.primaryColor,
-        border: `1px solid ${a.buttonBgColor || a.primaryColor}33`,
-      }
-    }
-    return {
-      ...buttonFontStyle,
-      backgroundColor: isPrimary
-        ? a.buttonBgColor || a.primaryColor
-        : `${a.buttonBgColor || a.primaryColor}E6`,
-      color: a.buttonTextColor || '#FFFFFF',
-      border: '1px solid transparent',
-    }
-  }
 
   const resolvedWebsite = safeHref(c.website || p.websiteUrl)
   const resolvedMaps = safeHref(c.googleMapsUrl || p.googleMapsUrl)
@@ -294,161 +227,68 @@ export default function DigitalCardRenderer({
       : []
 
   const socialStyle = card?.socialLinks?.displayStyle || 'icon_label'
-  const showBanner = a.showBanner !== false
   const coverUrl = v.showCoverImage !== false ? safeHref(p.coverImage?.url) : ''
   const avatarUrl =
     v.showProfilePicture !== false ? safeHref(p.profilePicture?.url) : ''
   const companyLogoUrl =
     v.showCompanyLogo !== false ? safeHref(p.companyLogo?.url) : ''
 
-  // Template-specific header banner & container styling
-  const isGlass = templateId === 'glass-tech'
-  const isBold = templateId === 'bold-modern'
-  const isCreative = templateId === 'creative-portfolio'
-  const isElegant = templateId === 'elegant-personal'
-
-  const bannerBg = coverUrl
-    ? {
-        backgroundImage: `url(${coverUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }
-    : isBold
-      ? { backgroundColor: a.primaryColor || '#DC2626' }
-      : {
-          background: `linear-gradient(135deg, ${a.primaryColor || '#1B6B4A'} 0%, ${a.secondaryColor || '#0F172A'} 100%)`,
-        }
-
-  const cardContainerStyle = {
-    backgroundColor: isGlass ? `${a.cardBgColor || '#1E293B'}CC` : a.cardBgColor || '#FFFFFF',
-    color: a.textColor || '#171716',
-    borderColor: a.borderColor || '#E5E5E3',
-    ...(isGlass ? { backdropFilter: 'blur(16px)' } : {}),
-  }
+  const cardContainerStyle = theme.cardFrameStyle(a)
 
   const mobileRadiusCls = {
     none: 'rounded-none',
-    md: 'rounded-none sm:rounded-lg',
-    xl: 'rounded-none sm:rounded-2xl',
+    sm: 'rounded-none sm:rounded-md',
+    md: 'rounded-none sm:rounded-xl',
+    lg: 'rounded-none sm:rounded-2xl',
+    xl: 'rounded-none sm:rounded-3xl',
     '2xl': 'rounded-none sm:rounded-3xl',
     full: 'rounded-none sm:rounded-[28px]',
   }[a.borderRadius] || 'rounded-none sm:rounded-2xl'
 
   const mobileWidthCls = {
+    narrow: 'sm:max-w-[380px]',
     compact: 'sm:max-w-[380px]',
     standard: 'sm:max-w-[460px]',
-    wide: 'sm:max-w-[560px]',
+    wide: 'sm:max-w-[580px]',
   }[a.cardWidth] || 'sm:max-w-[460px]'
+
+  const isNeo = templateId === 'bold-modern'
 
   return (
     <div
-      style={{ ...getBackdropStyle(a), ...bodyStyle }}
-      className={`w-full ${isPreview ? 'p-4 rounded-xl' : 'min-h-screen p-0 sm:py-10 sm:px-4'} flex flex-col items-center justify-start`}
+      style={{ ...getBackdropStyle(a, theme), ...bodyStyle }}
+      className={`w-full overflow-x-hidden ${
+        isPreview
+          ? 'p-4 rounded-xl'
+          : 'min-h-screen p-0 sm:py-10 sm:px-4'
+      } flex flex-col items-center justify-start`}
     >
-      <div
+      <article
         style={cardContainerStyle}
-        className={`w-full ${isPreview ? `${widthCls} ${radiusCls} border shadow-sm` : `${mobileWidthCls} ${mobileRadiusCls} border-0 sm:border sm:shadow-sm`} overflow-hidden transition-all`}
+        className={`card-reveal w-full ${
+          isPreview
+            ? `${widthCls} ${radiusCls} ${isNeo ? 'border-2' : 'border'}`
+            : `${mobileWidthCls} ${mobileRadiusCls} ${
+                isNeo ? 'border-0 sm:border-2' : 'border-0 sm:border'
+              }`
+        } overflow-hidden transition-all`}
       >
-        {/* Top Banner (Template-specific treatment) */}
-        {showBanner && (
-          <div
-            style={bannerBg}
-            className={`w-full ${BANNER_HEIGHTS[a.bannerHeight || 'md']} relative`}
-          >
-            {companyLogoUrl && (
-              <img
-                src={companyLogoUrl}
-                alt={p.companyName || 'Company logo'}
-                className="absolute top-3 right-3 h-9 w-9 object-contain rounded-md bg-white/90 p-1 shadow-xs"
-              />
-            )}
-          </div>
-        )}
+        {/* Template-specific Hero & Identity Lockup */}
+        <CardHeroHeader
+          card={card}
+          theme={theme}
+          displayName={displayName}
+          initials={initials}
+          coverUrl={coverUrl}
+          avatarUrl={avatarUrl}
+          companyLogoUrl={companyLogoUrl}
+          headingStyle={headingStyle}
+        />
 
         {/* Card Body */}
         <div
-          className={`p-5 sm:p-7 ${spacingCls} ${LINE_HEIGHTS[a.lineHeight || 'normal']} ${LETTER_SPACINGS[a.letterSpacing || 'normal']} ${BODY_SIZES[a.bodySize || 'md']}`}
+          className={`px-5 pb-6 pt-4 sm:px-7 sm:pb-7 ${spacingCls} ${LINE_HEIGHTS[a.lineHeight || 'normal']} ${LETTER_SPACINGS[a.letterSpacing || 'normal']} ${BODY_SIZES[a.bodySize || 'md']}`}
         >
-          {/* Header / Identity */}
-          <div
-            className={`flex flex-col ${
-              isCentered ? 'items-center text-center' : 'items-start text-left'
-            } ${showBanner && avatarUrl ? '-mt-14 sm:-mt-16 relative z-10' : ''}`}
-          >
-            {v.showProfilePicture !== false && (
-              <div
-                className={`${AVATAR_SIZES[a.profileImageSize || 'md']} ${AVATAR_SHAPES[a.profileImageShape || 'circle']} overflow-hidden border-4 flex items-center justify-center shrink-0 mb-3 shadow-sm`}
-                style={{
-                  borderColor: a.cardBgColor || '#FFFFFF',
-                  backgroundColor: `${a.primaryColor || '#1B6B4A'}20`,
-                  color: a.primaryColor || '#1B6B4A',
-                }}
-              >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={displayName}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xl font-bold" style={headingStyle}>
-                    {initials}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {isElegant && (
-              <div
-                className="w-10 h-0.5 mb-2"
-                style={{ backgroundColor: a.accentColor || a.primaryColor }}
-              />
-            )}
-
-            <h1
-              style={headingStyle}
-              className={`${HEADING_SIZES[a.headingSize || 'lg']} ${FONT_WEIGHTS[a.fontWeight || 'semibold']} tracking-tight`}
-            >
-              {displayName}
-            </h1>
-
-            {((v.showJobTitle !== false && p.jobTitle) ||
-              (v.showProfession !== false && p.profession)) && (
-              <p
-                className="text-sm font-medium mt-1 flex items-center gap-1.5 opacity-90"
-                style={{ color: a.accentColor || a.primaryColor }}
-              >
-                {!isCentered && <Briefcase className="w-3.5 h-3.5 shrink-0" />}
-                <span>
-                  {[
-                    v.showJobTitle !== false ? p.jobTitle : '',
-                    v.showProfession !== false ? p.profession : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </p>
-            )}
-
-            {v.showCompanyName !== false && p.companyName && (
-              <p className="text-xs opacity-75 mt-1 flex items-center gap-1">
-                <Building2 className="w-3.5 h-3.5 shrink-0" />
-                <span>{p.companyName}</span>
-              </p>
-            )}
-
-            {v.showTagline !== false && p.tagline && (
-              <p className="text-xs italic opacity-75 mt-2">{p.tagline}</p>
-            )}
-
-            {v.showLocation !== false && p.location && (
-              <p className="text-xs opacity-70 mt-1.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span>{p.location}</span>
-              </p>
-            )}
-          </div>
-
           {/* Bio */}
           {((v.showShortBio !== false && p.shortBio) ||
             (v.showLongBio !== false && p.longBio)) && (
@@ -456,230 +296,75 @@ export default function DigitalCardRenderer({
               className={`pt-4 border-t ${dividerBorder} ${isCentered ? 'text-center' : 'text-left'} space-y-2`}
             >
               {v.showShortBio !== false && p.shortBio && (
-                <p className="opacity-90">{p.shortBio}</p>
+                <p className="opacity-90 break-words leading-relaxed">
+                  {p.shortBio}
+                </p>
               )}
               {v.showLongBio !== false && p.longBio && (
-                <p className="text-xs opacity-75 whitespace-pre-line">
+                <p className="text-xs opacity-75 whitespace-pre-line break-words leading-relaxed">
                   {p.longBio}
                 </p>
               )}
             </div>
           )}
 
-          {/* Primary Action Buttons */}
+          {/* Primary & Secondary Contact Actions */}
           {orderedActions.length > 0 && (
+            <div className={`pt-4 border-t ${dividerBorder}`}>
+              <CardActionButtons
+                orderedActions={orderedActions}
+                actionMeta={actionMeta}
+                a={a}
+                theme={theme}
+                buttonFontStyle={buttonFontStyle}
+                isPreview={isPreview}
+                onActionClick={onActionClick}
+                onSaveContact={onSaveContact}
+              />
+            </div>
+          )}
+
+          {/* Brand-Aware Social Links */}
+          {visibleSocials.length > 0 && (
+            <div className={`pt-4 border-t ${dividerBorder}`}>
+              <CardSocialLinks
+                visibleSocials={visibleSocials}
+                socialStyle={socialStyle}
+                isCentered={isCentered}
+                a={a}
+                theme={theme}
+                headingStyle={headingStyle}
+                isPreview={isPreview}
+                onActionClick={onActionClick}
+              />
+            </div>
+          )}
+
+          {/* Tailored Custom Sections */}
+          <CardCustomSections
+            visibleSections={visibleSections}
+            a={a}
+            theme={theme}
+            dividerBorder={dividerBorder}
+            headingStyle={headingStyle}
+            isPreview={isPreview}
+          />
+
+          {/* Address Footer */}
+          {v.showAddress !== false && (c.businessAddress || p.address) && (
             <div
-              className={`pt-4 border-t ${dividerBorder} ${
-                isCreative || isBold
-                  ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5'
-                  : 'grid grid-cols-1 gap-2.5'
+              className={`pt-4 border-t ${dividerBorder} text-xs opacity-70 flex items-start gap-2 ${
+                isCentered ? 'justify-center text-center' : ''
               }`}
             >
-              {orderedActions.map((act, idx) => {
-                const meta = actionMeta[act.type]
-                const Icon = meta.icon
-                const label = act.label || act.type
-                if (meta.isSave) {
-                  return (
-                    <button
-                      key={act.id}
-                      type="button"
-                      onClick={() => {
-                        onActionClick?.(meta.event)
-                        onSaveContact?.()
-                      }}
-                      style={getButtonStyleObj(true)}
-                      className={`w-full ${btnSizeCls} ${btnShapeCls} font-medium inline-flex items-center justify-center gap-2 cursor-pointer transition-opacity hover:opacity-90 ${
-                        isCreative || isBold ? 'sm:col-span-2' : ''
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span>{label}</span>
-                    </button>
-                  )
-                }
-
-                return (
-                  <a
-                    key={act.id}
-                    href={isPreview ? undefined : meta.href}
-                    target={meta.external && !isPreview ? '_blank' : undefined}
-                    rel={meta.external ? 'noopener noreferrer' : undefined}
-                    onClick={(e) => {
-                      if (isPreview) e.preventDefault()
-                      onActionClick?.(meta.event)
-                    }}
-                    style={getButtonStyleObj(idx === 0)}
-                    className={`w-full ${btnSizeCls} ${btnShapeCls} font-medium inline-flex items-center justify-center gap-2 cursor-pointer transition-opacity hover:opacity-90`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{label}</span>
-                  </a>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Social Links */}
-          {visibleSocials.length > 0 && (
-            <div className={`pt-4 border-t ${dividerBorder} space-y-2.5`}>
-              {socialStyle === 'section' && (
-                <p
-                  className="text-xs font-semibold uppercase tracking-wider opacity-70"
-                  style={headingStyle}
-                >
-                  Connect
-                </p>
-              )}
-              <div
-                className={
-                  socialStyle === 'section'
-                    ? 'grid grid-cols-1 gap-2'
-                    : `flex flex-wrap gap-2 ${isCentered ? 'justify-center' : 'justify-start'}`
-                }
-              >
-                {visibleSocials.map((s) => {
-                  const text = s.label || s.platform
-                  return (
-                    <a
-                      key={s.id}
-                      href={isPreview ? undefined : safeHref(s.url)}
-                      target={isPreview ? undefined : '_blank'}
-                      rel="noopener noreferrer"
-                      onClick={(e) => {
-                        if (isPreview) e.preventDefault()
-                        onActionClick?.('socialClicks', s.platform)
-                      }}
-                      title={text}
-                      style={{
-                        borderColor: a.borderColor || '#E5E5E3',
-                        color: a.textColor,
-                      }}
-                      className={`inline-flex items-center gap-1.5 border ${btnShapeCls} text-xs font-medium transition-opacity hover:opacity-80 ${
-                        socialStyle === 'icon_only'
-                          ? 'p-2.5'
-                          : socialStyle === 'compact_button'
-                            ? 'px-2.5 py-1.5'
-                            : socialStyle === 'section'
-                              ? 'px-3.5 py-2.5 justify-between'
-                              : 'px-3 py-2'
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1.5 capitalize">
-                        <Share2 className="w-3.5 h-3.5 shrink-0" />
-                        {socialStyle !== 'icon_only' && <span>{text}</span>}
-                      </span>
-                      {socialStyle === 'section' && (
-                        <ExternalLink className="w-3.5 h-3.5 opacity-60" />
-                      )}
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Custom Content Sections */}
-          {visibleSections.map((sec) => (
-            <div key={sec.id} className={`pt-4 border-t ${dividerBorder} space-y-2.5`}>
-              {sec.title && (
-                <div>
-                  <h2
-                    style={headingStyle}
-                    className="text-sm font-semibold tracking-tight"
-                  >
-                    {sec.title}
-                  </h2>
-                  {sec.subtitle && (
-                    <p className="text-xs opacity-70">{sec.subtitle}</p>
-                  )}
-                </div>
-              )}
-
-              {sec.content && (
-                <p className="text-xs opacity-85 whitespace-pre-line">
-                  {sec.content}
-                </p>
-              )}
-
-              {sec.items?.length > 0 && (
-                <div
-                  className={
-                    sec.type === 'skills'
-                      ? 'flex flex-wrap gap-1.5'
-                      : sec.type === 'gallery'
-                        ? 'grid grid-cols-2 gap-2.5'
-                        : 'space-y-2'
-                  }
-                >
-                  {sec.items.map((item) => {
-                    if (sec.type === 'skills') {
-                      return (
-                        <span
-                          key={item.id}
-                          className="px-2.5 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `${a.accentColor || a.primaryColor}1A`,
-                            color: a.accentColor || a.primaryColor,
-                          }}
-                        >
-                          {item.title}
-                        </span>
-                      )
-                    }
-
-                    const itemUrl = safeHref(item.url)
-                    return (
-                      <div
-                        key={item.id}
-                        style={{ borderColor: a.borderColor || '#E5E5E3' }}
-                        className="rounded-lg border p-3 space-y-1"
-                      >
-                        {safeHref(item.image?.url) && (
-                          <img
-                            src={item.image.url}
-                            alt={item.title || 'Section image'}
-                            className="w-full h-28 object-cover rounded-md mb-2"
-                          />
-                        )}
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs font-semibold">{item.title}</p>
-                          {itemUrl && (
-                            <a
-                              href={isPreview ? undefined : itemUrl}
-                              target={isPreview ? undefined : '_blank'}
-                              rel="noopener noreferrer"
-                              onClick={(e) => {
-                                if (isPreview) e.preventDefault()
-                              }}
-                              style={{ color: a.accentColor || a.primaryColor }}
-                              className="text-xs inline-flex items-center gap-1 shrink-0 hover:underline"
-                            >
-                              <span>Open</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                        {item.description && (
-                          <p className="text-xs opacity-75">{item.description}</p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* Address footer */}
-          {v.showAddress !== false && (c.businessAddress || p.address) && (
-            <div className={`pt-4 border-t ${dividerBorder} text-xs opacity-70 flex items-start gap-1.5`}>
               <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{c.businessAddress || p.address}</span>
+              <span className="break-words">
+                {c.businessAddress || p.address}
+              </span>
             </div>
           )}
         </div>
-      </div>
+      </article>
     </div>
   )
 }

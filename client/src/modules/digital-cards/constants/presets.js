@@ -2,7 +2,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'minimal-white',
     name: 'Minimal White',
-    desc: 'Crisp editorial layout with clean hairlines',
+    desc: 'Modern Editorial — asymmetric lockup with crisp hairlines',
     defaults: {
       themeMode: 'light',
       primaryColor: '#1B6B4A',
@@ -28,7 +28,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'premium-dark',
     name: 'Premium Dark',
-    desc: 'Obsidian executive profile with refined contrast',
+    desc: 'Luxury Noir — obsidian surface with champagne gold lighting',
     defaults: {
       themeMode: 'dark',
       primaryColor: '#D4AF37',
@@ -54,7 +54,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'modern-gradient',
     name: 'Modern Gradient',
-    desc: 'Vibrant gradient hero overlapping avatar',
+    desc: 'Aurora Gradient — layered atmospheric color & pill CTAs',
     defaults: {
       themeMode: 'light',
       primaryColor: '#4F46E5',
@@ -81,7 +81,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'corporate-professional',
     name: 'Corporate Professional',
-    desc: 'Structured executive card with left-aligned lockup',
+    desc: 'Executive Elite — split portrait lockup & structured grid',
     defaults: {
       themeMode: 'light',
       primaryColor: '#1E3A8A',
@@ -107,7 +107,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'creative-portfolio',
     name: 'Creative Portfolio',
-    desc: 'Expressive asymmetric header with showcase emphasis',
+    desc: 'Creative Studio — asymmetric showcase & gallery focus',
     defaults: {
       themeMode: 'light',
       primaryColor: '#EA580C',
@@ -160,7 +160,7 @@ export const CARD_TEMPLATES = [
   {
     id: 'bold-modern',
     name: 'Bold Modern',
-    desc: 'High-contrast geometric block with strong presence',
+    desc: 'Neo Modern — geometric color-block & architectural shadow',
     defaults: {
       themeMode: 'light',
       primaryColor: '#DC2626',

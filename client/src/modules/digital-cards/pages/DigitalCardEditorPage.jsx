@@ -1083,23 +1083,28 @@ export default function DigitalCardEditorPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-border">
                   {[
                     { key: 'headingSize', label: 'Heading Size', opts: ['sm', 'md', 'lg', 'xl'] },
                     { key: 'bodySize', label: 'Body Size', opts: ['sm', 'md', 'lg'] },
                     { key: 'fontWeight', label: 'Weight', opts: ['normal', 'medium', 'semibold', 'bold'] },
                     { key: 'lineHeight', label: 'Line Height', opts: ['tight', 'normal', 'relaxed'] },
+                    { key: 'letterSpacing', label: 'Letter Spacing', opts: ['tight', 'normal', 'wide'] },
                   ].map((ctrl) => (
                     <div key={ctrl.key}>
-                      <label className="block text-[11px] font-medium text-text-secondary mb-1">
+                      <label
+                        htmlFor={`typo-${ctrl.key}`}
+                        className="block text-[11px] font-medium text-text-secondary mb-1"
+                      >
                         {ctrl.label}
                       </label>
                       <select
-                        value={a[ctrl.key]}
+                        id={`typo-${ctrl.key}`}
+                        value={a[ctrl.key] || (ctrl.key === 'letterSpacing' ? 'normal' : a[ctrl.key])}
                         onChange={(e) =>
                           updateAppearance({ [ctrl.key]: e.target.value })
                         }
-                        className="w-full rounded border border-border bg-white px-2 py-1 text-xs"
+                        className="w-full rounded border border-border bg-white px-2 py-1 text-xs capitalize"
                       >
                         {ctrl.opts.map((o) => (
                           <option key={o} value={o}>
@@ -1247,50 +1252,136 @@ export default function DigitalCardEditorPage() {
             )}
 
             {activeTab === 'layout' && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[
-                  { key: 'profileImageShape', label: 'Avatar Shape', opts: ['circle', 'rounded', 'square'] },
-                  { key: 'profileImageSize', label: 'Avatar Size', opts: ['sm', 'md', 'lg'] },
-                  { key: 'bannerHeight', label: 'Banner Height', opts: ['sm', 'md', 'lg'] },
-                  { key: 'textAlign', label: 'Text Align', opts: ['left', 'center'] },
-                  { key: 'sectionSpacing', label: 'Spacing', opts: ['compact', 'comfortable', 'spacious'] },
-                  { key: 'buttonStyle', label: 'Button Style', opts: ['filled', 'outlined', 'soft'] },
-                  { key: 'buttonShape', label: 'Button Shape', opts: ['rounded', 'pill', 'square'] },
-                  { key: 'buttonSize', label: 'Button Size', opts: ['sm', 'md', 'lg'] },
-                  { key: 'borderRadius', label: 'Card Radius', opts: ['none', 'sm', 'md', 'lg', 'xl'] },
-                  { key: 'cardWidth', label: 'Card Width', opts: ['narrow', 'standard', 'wide'] },
-                  { key: 'dividerStyle', label: 'Dividers', opts: ['line', 'subtle', 'none'] },
-                ].map((ctrl) => (
-                  <div key={ctrl.key}>
-                    <label className="block text-[11px] font-medium text-text-secondary mb-1">
-                      {ctrl.label}
-                    </label>
-                    <select
-                      value={a[ctrl.key]}
-                      onChange={(e) =>
-                        updateAppearance({ [ctrl.key]: e.target.value })
-                      }
-                      className="w-full rounded border border-border bg-white px-2 py-1.5 text-xs capitalize"
+              <div className="space-y-4">
+                {/* Editable Banner Height + Show Banner */}
+                <div className="p-3 rounded-lg border border-border bg-surface/30 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="banner-height-range"
+                      className="text-xs font-medium text-text-primary"
                     >
-                      {ctrl.opts.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                      Banner Height
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={a.showBanner !== false}
+                        onChange={(e) =>
+                          updateAppearance({ showBanner: e.target.checked })
+                        }
+                        className="accent-primary"
+                      />
+                      <span>Show Banner</span>
+                    </label>
                   </div>
-                ))}
-                <label className="flex items-center gap-2 text-xs font-medium text-text-primary pt-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={a.showBanner !== false}
-                    onChange={(e) =>
-                      updateAppearance({ showBanner: e.target.checked })
-                    }
-                    className="accent-primary"
-                  />
-                  <span>Show Banner</span>
-                </label>
+
+                  {a.showBanner !== false && (() => {
+                    const presetMap = { sm: 112, md: 160, lg: 208 }
+                    const currentPx =
+                      typeof a.bannerHeight === 'number'
+                        ? a.bannerHeight
+                        : presetMap[a.bannerHeight] ||
+                          (Number.isFinite(Number(a.bannerHeight))
+                            ? Number(a.bannerHeight)
+                            : 160)
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <input
+                            id="banner-height-range"
+                            type="range"
+                            min={60}
+                            max={360}
+                            step={4}
+                            value={currentPx}
+                            onChange={(e) =>
+                              updateAppearance({
+                                bannerHeight: Number(e.target.value),
+                              })
+                            }
+                            className="flex-1 accent-primary cursor-pointer"
+                          />
+                          <div className="flex items-center gap-1 border border-border rounded bg-white px-2 py-1 w-20">
+                            <input
+                              type="number"
+                              aria-label="Banner Height in pixels"
+                              min={60}
+                              max={360}
+                              value={currentPx}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                if (Number.isFinite(val)) {
+                                  updateAppearance({
+                                    bannerHeight: Math.min(360, Math.max(60, val)),
+                                  })
+                                }
+                              }}
+                              className="w-full text-xs tabular-nums focus:outline-none"
+                            />
+                            <span className="text-[10px] text-text-tertiary">px</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            { label: 'Compact (100px)', value: 100 },
+                            { label: 'Standard (160px)', value: 160 },
+                            { label: 'Tall (220px)', value: 220 },
+                            { label: 'Hero (280px)', value: 280 },
+                          ].map((preset) => (
+                            <button
+                              key={preset.value}
+                              type="button"
+                              onClick={() =>
+                                updateAppearance({ bannerHeight: preset.value })
+                              }
+                              className={`px-2 py-1 rounded text-[11px] font-medium border cursor-pointer transition-colors ${
+                                currentPx === preset.value
+                                  ? 'border-primary bg-primary-light text-primary'
+                                  : 'border-border bg-white text-text-secondary hover:text-text-primary'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { key: 'profileImageShape', label: 'Avatar Shape', opts: ['circle', 'rounded', 'square'] },
+                    { key: 'profileImageSize', label: 'Avatar Size', opts: ['sm', 'md', 'lg'] },
+                    { key: 'textAlign', label: 'Text Align', opts: ['left', 'center'] },
+                    { key: 'sectionSpacing', label: 'Spacing', opts: ['compact', 'comfortable', 'spacious'] },
+                    { key: 'buttonStyle', label: 'Button Style', opts: ['filled', 'outlined', 'soft'] },
+                    { key: 'buttonShape', label: 'Button Shape', opts: ['rounded', 'pill', 'square'] },
+                    { key: 'buttonSize', label: 'Button Size', opts: ['sm', 'md', 'lg'] },
+                    { key: 'borderRadius', label: 'Card Radius', opts: ['none', 'sm', 'md', 'lg', 'xl'] },
+                    { key: 'cardWidth', label: 'Card Width', opts: ['narrow', 'standard', 'wide'] },
+                    { key: 'dividerStyle', label: 'Dividers', opts: ['line', 'subtle', 'none'] },
+                  ].map((ctrl) => (
+                    <div key={ctrl.key}>
+                      <label className="block text-[11px] font-medium text-text-secondary mb-1">
+                        {ctrl.label}
+                      </label>
+                      <select
+                        value={a[ctrl.key]}
+                        onChange={(e) =>
+                          updateAppearance({ [ctrl.key]: e.target.value })
+                        }
+                        className="w-full rounded border border-border bg-white px-2 py-1.5 text-xs capitalize"
+                      >
+                        {ctrl.opts.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

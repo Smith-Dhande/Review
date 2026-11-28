@@ -218,7 +218,7 @@ const digitalCardSchema = new mongoose.Schema(
       profileImageShape: { type: String, enum: ['circle', 'rounded', 'square'], default: 'circle' },
       profileImageSize: { type: String, enum: ['sm', 'md', 'lg'], default: 'md' },
       showBanner: { type: Boolean, default: true },
-      bannerHeight: { type: String, enum: ['sm', 'md', 'lg'], default: 'md' },
+      bannerHeight: { type: mongoose.Schema.Types.Mixed, default: 'md' },
       textAlign: { type: String, enum: ['left', 'center'], default: 'center' },
       contentAlign: { type: String, enum: ['left', 'center'], default: 'center' },
       sectionSpacing: { type: String, enum: ['compact', 'comfortable', 'spacious'], default: 'comfortable' },
@@ -261,6 +261,7 @@ digitalCardSchema.index({ 'personalInformation.profilePicture.publicId': 1 }, { 
 digitalCardSchema.index({ 'personalInformation.coverImage.publicId': 1 }, { sparse: true })
 digitalCardSchema.index({ 'personalInformation.companyLogo.publicId': 1 }, { sparse: true })
 digitalCardSchema.index({ 'appearance.backgroundImage.publicId': 1 }, { sparse: true })
+digitalCardSchema.index({ 'customSections.items.image.publicId': 1 }, { sparse: true })
 
 const DigitalCard = mongoose.model('DigitalCard', digitalCardSchema)
 export default DigitalCard

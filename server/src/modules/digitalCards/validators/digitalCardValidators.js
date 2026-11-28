@@ -176,7 +176,12 @@ export const createDigitalCardSchema = z.object({
       profileImageShape: z.enum(['circle', 'rounded', 'square']).optional(),
       profileImageSize: z.enum(['sm', 'md', 'lg']).optional(),
       showBanner: z.boolean().optional(),
-      bannerHeight: z.enum(['sm', 'md', 'lg']).optional(),
+      bannerHeight: z
+        .union([
+          z.enum(['sm', 'md', 'lg']),
+          z.coerce.number().int().min(60).max(360),
+        ])
+        .optional(),
       textAlign: z.enum(['left', 'center']).optional(),
       contentAlign: z.enum(['left', 'center']).optional(),
       sectionSpacing: z.enum(['compact', 'comfortable', 'spacious']).optional(),

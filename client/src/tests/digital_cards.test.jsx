@@ -10,6 +10,7 @@ import {
   CARD_TEMPLATES,
   createDefaultCardPayload,
 } from '../modules/digital-cards/constants/presets'
+import DigitalCardRenderer from '../modules/digital-cards/templates/DigitalCardRenderer'
 
 const mockList = vi.fn()
 const mockGet = vi.fn()
@@ -192,5 +193,157 @@ describe('Digital Business Cards (V2) Frontend Tests', () => {
     expect(
       await screen.findByText(/currently paused and unavailable/i),
     ).toBeInTheDocument()
+  })
+
+  it('5. All 8 templates render cleanly with missing optional fields and full-bleed mobile layout', () => {
+    CARD_TEMPLATES.forEach((tpl) => {
+      const minimalCard = {
+        ...createDefaultCardPayload('Minimal Profile'),
+        templateId: tpl.id,
+        appearance: {
+          ...createDefaultCardPayload('').appearance,
+          ...tpl.defaults,
+        },
+        personalInformation: {
+          fullName: 'Minimal Profile',
+        },
+        contactInformation: {
+          actions: [{ id: 'save', type: 'save_contact', label: 'Save Contact', enabled: true, order: 0 }],
+        },
+        socialLinks: { displayStyle: 'icon_only', items: [] },
+        customSections: [],
+      }
+
+      const { container, unmount } = render(
+        <DigitalCardRenderer card={minimalCard} isPreview={false} />,
+      )
+      expect(screen.getByRole('heading', { name: 'Minimal Profile' })).toBeInTheDocument()
+      expect(container.firstChild.className).toContain('p-0')
+      expect(container.firstChild.className).toContain('sm:px-4')
+      const article = container.querySelector('article')
+      expect(article.className).toContain('rounded-none')
+      unmount()
+    })
+  })
+
+  it('6. DigitalCardRenderer handles long names, many social links, and all custom section types', () => {
+    const richCard = {
+      ...sampleCard,
+      templateId: 'creative-portfolio',
+      personalInformation: {
+        ...sampleCard.personalInformation,
+        fullName: 'Dr. Bartholomew Maximilian-Constantine Featherstonehaugh III',
+        companyName: 'International Amalgamated Architectural & Biomedical Consulting Partners LLP',
+      },
+      socialLinks: {
+        displayStyle: 'section',
+        items: [
+          { id: 's1', platform: 'instagram', url: 'https://instagram.com/test', label: 'Instagram', enabled: true },
+          { id: 's2', platform: 'linkedin', url: 'https://linkedin.com/in/test', label: 'LinkedIn', enabled: true },
+          { id: 's3', platform: 'twitter', url: 'https://x.com/test', label: 'X / Twitter', enabled: true },
+          { id: 's4', platform: 'github', url: 'https://github.com/test', label: 'GitHub', enabled: true },
+          { id: 's5', platform: 'youtube', url: 'https://youtube.com/@test', label: 'YouTube', enabled: true },
+        ],
+      },
+      customSections: [
+        {
+          id: 'sec-services',
+          type: 'services',
+          title: 'Services',
+          visible: true,
+          order: 0,
+          items: [{ id: 'i1', title: 'Brand Strategy', description: 'Full identity systems' }],
+        },
+        {
+          id: 'sec-skills',
+          type: 'skills',
+          title: 'Skills',
+          visible: true,
+          order: 1,
+          items: [{ id: 'i2', title: 'Design Systems' }],
+        },
+        {
+          id: 'sec-ach',
+          type: 'achievements',
+          title: 'Achievements',
+          visible: true,
+          order: 2,
+          items: [{ id: 'i3', title: 'Red Dot Award 2026', description: 'Product design' }],
+        },
+        {
+          id: 'sec-cert',
+          type: 'certifications',
+          title: 'Certifications',
+          visible: true,
+          order: 3,
+          items: [{ id: 'i4', title: 'Google UX Certified', url: 'https://example.com/cert' }],
+        },
+        {
+          id: 'sec-links',
+          type: 'links',
+          title: 'Resources',
+          visible: true,
+          order: 4,
+          items: [
+            { id: 'i5', title: 'Book Consultation', url: 'https://example.com/book' },
+            { id: 'i6', title: 'Download Brochure', url: 'https://example.com/brochure', description: 'PDF guide' },
+          ],
+        },
+        {
+          id: 'sec-links-empty',
+          type: 'links',
+          title: 'Empty Links',
+          visible: true,
+          order: 5,
+          items: [],
+        },
+        {
+          id: 'sec-links-partial',
+          type: 'links',
+          title: 'Partial Links',
+          visible: true,
+          order: 6,
+          items: [{ id: 'i7', title: 'Link Without URL' }],
+        },
+      ],
+    }
+
+    render(<DigitalCardRenderer card={richCard} isPreview={false} />)
+    expect(
+      screen.getByRole('heading', {
+        name: 'Dr. Bartholomew Maximilian-Constantine Featherstonehaugh III',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Brand Strategy')).toBeInTheDocument()
+    expect(screen.getByText('Design Systems')).toBeInTheDocument()
+    expect(screen.getByText('Red Dot Award 2026')).toBeInTheDocument()
+    expect(screen.getByText('Google UX Certified')).toBeInTheDocument()
+    expect(screen.getByText('Book Consultation')).toBeInTheDocument()
+    expect(screen.getByText('Download Brochure')).toBeInTheDocument()
+    expect(screen.getByText('PDF guide')).toBeInTheDocument()
+    expect(screen.getByText('Empty Links')).toBeInTheDocument()
+    expect(screen.getByText('Link Without URL')).toBeInTheDocument()
+    const consultLink = screen.getByText('Book Consultation').closest('a')
+    expect(consultLink).toHaveAttribute('href', 'https://example.com/book')
+    const brochureLink = screen.getByText('Download Brochure').closest('a')
+    expect(brochureLink).toHaveAttribute('href', 'https://example.com/brochure')
+    expect(screen.getByRole('link', { name: 'Instagram' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument()
+  })
+
+  it('7. DigitalCardEditorPage exposes Letter Spacing control and updates live preview', async () => {
+    render(
+      <MemoryRouter initialEntries={['/digital-cards/new']}>
+        <Routes>
+          <Route path="/digital-cards/new" element={<DigitalCardEditorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Typography' }))
+    const letterSpacingSelect = screen.getByLabelText('Letter Spacing')
+    expect(letterSpacingSelect).toHaveValue('normal')
+    fireEvent.change(letterSpacingSelect, { target: { value: 'wide' } })
+    expect(letterSpacingSelect).toHaveValue('wide')
   })
 })
