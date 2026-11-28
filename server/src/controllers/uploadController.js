@@ -1,5 +1,6 @@
 import { deleteImageAsset, uploadImageBuffer } from '../services/imageStorageService.js'
 import { isLogoReferencedByAnyBusiness } from '../repositories/businessRepo.js'
+import { isDigitalCardAssetReferenced } from '../modules/digitalCards/repositories/digitalCardRepo.js'
 import { cleanupLogoSchema } from '../validators/businessValidators.js'
 
 const MAX_PENDING_LOGOS = 20
@@ -27,8 +28,14 @@ export function clearPendingLogoFromSession(req, publicId) {
 
 export async function uploadLogo(req, res, next) {
   try {
+    const scope = String(req.query.scope || '').trim()
+    const folder =
+      scope === 'digital-card'
+        ? 'reviewbuddy/digital-cards/assets'
+        : undefined
     const asset = await uploadImageBuffer(req.file.buffer, {
       format: req.detectedImageFormat,
+      folder,
     })
     trackPendingLogo(req, asset.publicId)
     if (req.session) {
@@ -60,7 +67,9 @@ export async function cleanupTempLogo(req, res, next) {
       })
     }
 
-    const inUse = await isLogoReferencedByAnyBusiness(publicId)
+    const inUse =
+      (await isLogoReferencedByAnyBusiness(publicId)) ||
+      (await isDigitalCardAssetReferenced(publicId))
     if (inUse) {
       clearPendingLogoFromSession(req, publicId)
       return res.status(409).json({

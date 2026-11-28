@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Building2,
+  CreditCard,
   Settings,
   LogOut,
   ChevronLeft,
@@ -14,6 +15,7 @@ import { useAuth } from '../../context/AuthContext'
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Businesses', path: '/businesses', icon: Building2 },
+  { label: 'Digital Business Cards', path: '/digital-cards', icon: CreditCard },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]
 

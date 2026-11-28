@@ -128,3 +128,20 @@ db.analyticsevents.dropIndex("eventType_1_createdAt_-1");
 db.analyticsevents.dropIndex("businessPublicId_1_eventType_1_createdAt_-1");
 db.businesses.dropIndex("name_1");
 ```
+
+---
+
+## 9. Live Deployment Reference & Pre-Launch Reminders
+
+- **Frontend (Vercel Production):** `https://review-one-teal.vercel.app` (uses `/api/*` rewrite in `client/vercel.json`)
+- **Backend (Render Free Web Service):** `https://reviewbuddyapi.onrender.com` (Health Check: `GET /api/health`)
+- **Render Keep-Awake (Enable when onboarding paying businesses):**
+  - Service: `https://cron-job.org`
+  - Target: `GET https://reviewbuddyapi.onrender.com/api/health`
+  - Schedule: Every **10 minutes** during active business hours (e.g., 9:00 AM – 11:00 PM)
+  - Timeout: **30 seconds**
+  - Notifications: Enable email alerts on failure / when disabled.
+- **Custom Domain (Before printing physical QR standees / NFC tags):**
+  1. Attach your custom domain in Vercel.
+  2. Update `FRONTEND_URL` and `CORS_ORIGINS` on Render to the custom `https://` domain (leave `COOKIE_DOMAIN` unset when using the Vercel `/api/*` rewrite).
+

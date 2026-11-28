@@ -10,6 +10,8 @@ import businessRoutes from './routes/businessRoutes.js'
 import publicRoutes from './routes/publicRoutes.js'
 import analyticsRoutes from './routes/analyticsRoutes.js'
 import { createUploadRouter } from './routes/uploadRoutes.js'
+import digitalCardRoutes from './modules/digitalCards/routes/digitalCardRoutes.js'
+import publicDigitalCardRoutes from './modules/digitalCards/routes/publicDigitalCardRoutes.js'
 
 export function createApp() {
   const env = getEnvConfig()
@@ -71,12 +73,14 @@ export function createApp() {
 
   // Public customer endpoints never touch admin session storage
   app.use('/api/public', publicRoutes)
+  app.use('/api/public/digital-cards', publicDigitalCardRoutes)
 
   const sessionMiddleware = createSessionMiddleware(env)
   app.use('/api/auth', sessionMiddleware, createAuthRouter())
   app.use('/api/uploads', sessionMiddleware, createUploadRouter())
   app.use('/api/businesses', sessionMiddleware, businessRoutes)
   app.use('/api/analytics', sessionMiddleware, analyticsRoutes)
+  app.use('/api/digital-cards', sessionMiddleware, digitalCardRoutes)
 
   app.use(errorHandler)
 

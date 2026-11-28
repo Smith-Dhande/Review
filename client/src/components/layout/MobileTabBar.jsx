@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Building2, Settings } from 'lucide-react'
+import { LayoutDashboard, Building2, CreditCard, Settings } from 'lucide-react'
 
 const TAB_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Businesses', path: '/businesses', icon: Building2 },
+  { label: 'Cards', path: '/digital-cards', icon: CreditCard },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]
 
